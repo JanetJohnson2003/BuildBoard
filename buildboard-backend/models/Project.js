@@ -6,11 +6,13 @@ const ProjectSchema = new mongoose.Schema({
     required: true
   },
   description: {
-    type: String
+    type: String,
+    default: ''
   },
-  user: {
+  createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    required: true
   },
   sharedWith: [
     {

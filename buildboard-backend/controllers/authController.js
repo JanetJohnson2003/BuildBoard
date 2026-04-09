@@ -32,6 +32,7 @@ exports.register = async (req, res) => {
 };
 
 // LOGIN
+// LOGIN
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -47,15 +48,20 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user._id },
+      { userId: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    // ✅ ADD ROLE HERE
+    // ✅ RETURN user OBJECT along with token and role
     res.json({
       token,
-      role: user.role
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
 
   } catch (error) {

@@ -1,31 +1,140 @@
 const Feedback = require('../models/Feedback');
 
-// ADD FEEDBACK
-exports.addFeedback = async (req, res) => {
+// CREATE FEEDBACK
+exports.createFeedback = async (req, res) => {
   try {
     const { versionId, comment, rating } = req.body;
 
+    if (!versionId || !comment || !rating) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
     const feedback = await Feedback.create({
       version: versionId,
+      reviewer: req.userId,
       comment,
       rating
     });
 
-    res.status(201).json(feedback);
+    await feedback.populate('reviewer', 'name email role');
 
+    res.status(201).json(feedback);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// GET FEEDBACK
-exports.getFeedback = async (req, res) => {
+// GET FEEDBACK BY VERSION
+exports.getFeedbackByVersion = async (req, res) => {
   try {
     const { versionId } = req.params;
 
-    const feedback = await Feedback.find({ version: versionId });
-    res.json(feedback);
+    const feedbacks = await Feedback.find({ version: versionId })
+      .populate('reviewer', 'name email role')
+      .populate('replies.author', 'name email role')
+      .sort({ createdAt: -1 });
 
+    res.json(feedbacks);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET ALL FEEDBACK
+exports.getAllFeedback = async (req, res) => {
+  try {
+    const feedbacks = await Feedback.find()
+      .populate('reviewer', 'name email role')
+      .populate('replies.author', 'name email role')
+      .populate('version')
+      .sort({ createdAt: -1 });
+
+    res.json(feedbacks);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ADD REPLY TO FEEDBACK
+exports.addReply = async (req, res) => {
+  try {
+    const { feedbackId } = req.params;
+    const { comment } = req.body;
+
+    if (!comment) {
+      return res.status(400).json({ message: 'Comment is required' });
+    }
+
+    const feedback = await Feedback.findById(feedbackId);
+
+    if (!feedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+
+    feedback.replies.push({
+      author: req.userId,
+      comment
+    });
+
+    await feedback.save();
+    await feedback.populate('reviewer', 'name email role');
+    await feedback.populate('replies.author', 'name email role');
+
+    res.status(201).json(feedback);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// DELETE REPLY
+exports.deleteReply = async (req, res) => {
+  try {
+    const { feedbackId, replyId } = req.params;
+
+    const feedback = await Feedback.findById(feedbackId);
+
+    if (!feedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+
+    const reply = feedback.replies.id(replyId);
+
+    if (!reply) {
+      return res.status(404).json({ message: 'Reply not found' });
+    }
+
+    if (reply.author.toString() !== req.userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    feedback.replies.id(replyId).deleteOne();
+    await feedback.save();
+
+    await feedback.populate('reviewer', 'name email role');
+    await feedback.populate('replies.author', 'name email role');
+
+    res.json(feedback);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// DELETE FEEDBACK
+exports.deleteFeedback = async (req, res) => {
+  try {
+    const { feedbackId } = req.params;
+    const feedback = await Feedback.findById(feedbackId);
+
+    if (!feedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+
+    if (feedback.reviewer.toString() !== req.userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    await Feedback.findByIdAndDelete(feedbackId);
+    res.json({ message: 'Feedback deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
