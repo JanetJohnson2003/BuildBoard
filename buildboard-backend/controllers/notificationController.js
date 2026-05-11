@@ -1,4 +1,7 @@
 const Notification = require('../models/Notification');
+const User = require('../models/User');
+const Version = require('../models/Version');
+const Project = require('../models/Project');
 
 // CREATE NOTIFICATION
 exports.createNotification = async (req, res) => {
@@ -33,6 +36,7 @@ exports.getUserNotifications = async (req, res) => {
     const notifications = await Notification.find({ recipient: req.userId })
       .populate('sender', 'name email')
       .populate('project', 'title')
+      .populate('version', 'versionNumber')
       .sort({ createdAt: -1 });
 
     res.json(notifications);
@@ -109,5 +113,38 @@ exports.deleteNotification = async (req, res) => {
   } catch (error) {
     console.error('Delete notification error:', error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// HELPER: CREATE NOTIFICATION INTERNALLY (called from other controllers)
+exports.createNotificationInternal = async (recipientId, senderId, type, title, message, projectId, versionId) => {
+  try {
+    // Don't send notification to self
+    if (recipientId.toString() === senderId.toString()) {
+      return null;
+    }
+
+    const notification = await Notification.create({
+      recipient: recipientId,
+      sender: senderId,
+      type,
+      title,
+      message,
+      project: projectId,
+      version: versionId,
+      read: false
+    });
+
+    await notification.populate('sender', 'name email');
+    console.log('✅ Notification created:', {
+      recipient: recipientId,
+      type,
+      title
+    });
+
+    return notification;
+  } catch (error) {
+    console.error('⚠️ Error creating internal notification:', error.message);
+    return null;
   }
 };

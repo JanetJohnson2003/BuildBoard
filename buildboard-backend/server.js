@@ -1,45 +1,54 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const dotenv = require('dotenv');
 const cors = require('cors');
-require('dotenv').config();
+
+dotenv.config();
 
 const app = express();
-const userRoutes = require('./routes/users');
+
+// ✅ ENABLE CORS - Allow ALL development ports
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],  // ← Add 5174
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true
-}));
 app.use(express.json());
 
-// Test route
-app.get('/', (req, res) => {
-  res.send('BuildBoard+ Backend is running!');
-});
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/buildboard';
+
+mongoose.connect(MONGODB_URI)
+  .then(() => {
+    console.log('✅ MongoDB connected successfully');
+    console.log('📍 Connected to:', MONGODB_URI);
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/versions', require('./routes/versions'));
-app.use('/api/feedback', require('./routes/feedback'));
 app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/analytics', require('./routes/analytics'));  // ← ADD THIS
-app.use('/uploads', express.static('uploads'));
-app.use('/api/users', userRoutes);
-app.use('/api/users', require('./routes/users'));
-
-// Connect to MongoDB and start server
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI;
-
-mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log('✅ MongoDB connected successfully');
-    app.listen(PORT, () => {
-      console.log(`✅ Server running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.log('❌ MongoDB connection error:', err);
+app.use('/api/feedback', require('./routes/feedback'));
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('❌ Server error:', err);
+  res.status(500).json({ 
+    message: 'Internal server error',
+    error: err.message 
   });
+});
+
+// Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});

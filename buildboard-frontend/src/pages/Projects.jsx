@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
-import ShareModal from '../components/ShareModal'
 import Toast from '../components/Toast'
 import Notifications from '../components/Notifications'
 
@@ -11,14 +10,12 @@ function Projects() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [showForm, setShowForm] = useState(false)
-  const [showShareModal, setShowShareModal] = useState(false)
-  const [selectedProject, setSelectedProject] = useState(null)
   const [toast, setToast] = useState(null)
 
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterUser, setFilterUser] = useState('all') // all, owned, shared
-  const [filterDate, setFilterDate] = useState('all') // all, week, month, year
+  const [filterUser, setFilterUser] = useState('all')
+  const [filterDate, setFilterDate] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
 
   const navigate = useNavigate()
@@ -36,6 +33,20 @@ function Projects() {
   
   const user = getUserData()
 
+  const fetchProjects = useCallback(async () => {
+    try {
+      console.log('📥 Fetching projects...')
+      const res = await axios.get('http://localhost:5000/api/projects', {
+        headers: { Authorization: token }
+      })
+      setProjects(res.data)
+      console.log('✅ Projects fetched:', res.data.length)
+    } catch (err) {
+      showToast('Failed to load projects', 'error')
+      console.error('Error:', err.message)
+    }
+  }, [token])
+
   useEffect(() => {
     if (!token || !user) {
       navigate('/')
@@ -46,30 +57,15 @@ function Projects() {
     if (token && user) {
       fetchProjects()
     }
-  }, [token, user])
+  }, [token, user, fetchProjects])
 
-  // Apply filters whenever projects, search, or filters change
   useEffect(() => {
     applyFilters()
   }, [projects, searchQuery, filterUser, filterDate])
 
-  const fetchProjects = async () => {
-    try {
-      const res = await axios.get('http://localhost:5000/api/projects', {
-        headers: { Authorization: token }
-      })
-      setProjects(res.data)
-    } catch (err) {
-      showToast('Failed to load projects', 'error')
-      console.log(err)
-    }
-  }
-
-  // Filter logic
   const applyFilters = () => {
     let filtered = [...projects]
 
-    // Search by name
     if (searchQuery.trim()) {
       filtered = filtered.filter(p =>
         p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -77,24 +73,18 @@ function Projects() {
       )
     }
 
-    // Filter by user type
     if (filterUser === 'owned') {
       filtered = filtered.filter(p => p.createdBy._id === user._id)
-    } else if (filterUser === 'shared') {
-      filtered = filtered.filter(p => p.sharedWith.includes(user._id))
     }
 
-    // Filter by date
     if (filterDate !== 'all') {
       const now = new Date()
       filtered = filtered.filter(p => {
         const createdDate = new Date(p.createdAt)
         let daysAgo = 0
-
         if (filterDate === 'week') daysAgo = 7
         else if (filterDate === 'month') daysAgo = 30
         else if (filterDate === 'year') daysAgo = 365
-
         const cutoffDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
         return createdDate >= cutoffDate
       })
@@ -122,14 +112,10 @@ function Projects() {
     }
   }
 
-  const handleShare = (projectId, projectTitle) => {
-    setSelectedProject({ id: projectId, title: projectTitle })
-    setShowShareModal(true)
-  }
-
-  const handleShareSuccess = (message) => {
-    showToast(message, 'success')
-    fetchProjects()
+  const handleShare = (projectId) => {
+    const link = `${window.location.origin}/versions/${projectId}`
+    navigator.clipboard.writeText(link)
+    showToast('Link copied to clipboard! 📋', 'success')
   }
 
   const showToast = (message, type = 'info') => {
@@ -164,19 +150,6 @@ function Projects() {
         />
       )}
 
-      {showShareModal && selectedProject && (
-        <ShareModal
-          projectId={selectedProject.id}
-          projectTitle={selectedProject.title}
-          token={token}
-          onClose={() => {
-            setShowShareModal(false)
-            setSelectedProject(null)
-          }}
-          onSuccess={handleShareSuccess}
-        />
-      )}
-
       <div style={styles.navbar}>
         <h2 style={styles.logo}>BuildBoard+</h2>
         <div style={styles.navRight}>
@@ -194,7 +167,6 @@ function Projects() {
       </div>
 
       <div style={styles.body}>
-        {/* Top Row with Title and Buttons */}
         <div style={styles.topRow}>
           <h3 style={styles.heading}>My Projects</h3>
           <div style={styles.topActions}>
@@ -214,11 +186,9 @@ function Projects() {
           </div>
         </div>
 
-        {/* Search & Filter Section */}
         {showFilters && (
           <div style={styles.filterPanel}>
             <div style={styles.filterRow}>
-              {/* Search */}
               <div style={styles.filterGroup}>
                 <label style={styles.filterLabel}>🔍 Search Projects</label>
                 <input
@@ -231,7 +201,6 @@ function Projects() {
                 />
               </div>
 
-              {/* User Filter */}
               <div style={styles.filterGroup}>
                 <label style={styles.filterLabel}>👤 Project Type</label>
                 <select
@@ -241,11 +210,9 @@ function Projects() {
                 >
                   <option value="all">All Projects</option>
                   <option value="owned">📋 My Projects</option>
-                  <option value="shared">📤 Shared with Me</option>
                 </select>
               </div>
 
-              {/* Date Filter */}
               <div style={styles.filterGroup}>
                 <label style={styles.filterLabel}>📅 Date Range</label>
                 <select
@@ -260,7 +227,6 @@ function Projects() {
                 </select>
               </div>
 
-              {/* Reset Button */}
               <div style={styles.filterGroup}>
                 <button style={styles.resetBtn} onClick={resetFilters}>
                   ✕ Clear All
@@ -268,7 +234,6 @@ function Projects() {
               </div>
             </div>
 
-            {/* Results Counter */}
             <div style={styles.resultsInfo}>
               📊 Showing <strong>{filteredProjects.length}</strong> of <strong>{projects.length}</strong> projects
               {hasActiveFilters && ' (filtered)'}
@@ -276,7 +241,6 @@ function Projects() {
           </div>
         )}
 
-        {/* Create Form */}
         {showForm && (
           <div style={styles.form}>
             <h4 style={styles.formTitle}>✏️ Create New Project</h4>
@@ -311,7 +275,6 @@ function Projects() {
           </div>
         )}
 
-        {/* Projects Grid */}
         {filteredProjects.length === 0 ? (
           <div style={styles.empty}>
             <p>
@@ -326,11 +289,7 @@ function Projects() {
               <div key={project._id} style={styles.card}>
                 <div style={styles.cardHeader}>
                   <h4 style={styles.cardTitle}>{project.title}</h4>
-                  {project.createdBy._id === user._id ? (
-                    <span style={styles.badge}>👤 Owned</span>
-                  ) : (
-                    <span style={styles.badgeShared}>📤 Shared</span>
-                  )}
+                  <span style={styles.badge}>👤 Owned</span>
                 </div>
                 <p style={styles.cardDesc}>
                   {project.description || '📝 No description'}
@@ -342,11 +301,6 @@ function Projects() {
                     day: 'numeric'
                   })}
                 </p>
-                {project.sharedWith && project.sharedWith.length > 0 && (
-                  <p style={styles.sharedCount}>
-                    📤 Shared with {project.sharedWith.length} user{project.sharedWith.length !== 1 ? 's' : ''}
-                  </p>
-                )}
                 <div style={styles.btnRow}>
                   <button
                     style={styles.viewBtn}
@@ -356,7 +310,8 @@ function Projects() {
                   </button>
                   <button
                     style={styles.shareBtn}
-                    onClick={() => handleShare(project._id, project.title)}
+                    onClick={() => handleShare(project._id)}
+                    title="Copy project link"
                   >
                     Share 🔗
                   </button>
@@ -403,11 +358,7 @@ const styles = {
     alignItems: 'center', marginBottom: '24px',
     flexWrap: 'wrap', gap: '16px'
   },
-  topActions: {
-    display: 'flex',
-    gap: '12px',
-    flexWrap: 'wrap'
-  },
+  topActions: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
   heading: { margin: 0, fontSize: '28px', color: '#333', fontWeight: '700' },
   filterToggleBtn: {
     padding: '10px 20px',
@@ -425,11 +376,7 @@ const styles = {
     backgroundColor: '#ea580c',
     boxShadow: '0 0 0 3px rgba(249, 115, 22, 0.2)'
   },
-  filterBadge: {
-    display: 'inline-block',
-    marginLeft: '6px',
-    color: '#fef3c7'
-  },
+  filterBadge: { display: 'inline-block', marginLeft: '6px', color: '#fef3c7' },
   addBtn: {
     padding: '10px 20px', backgroundColor: '#4f46e5',
     color: '#fff', border: 'none', borderRadius: '8px',
@@ -450,16 +397,8 @@ const styles = {
     gap: '16px',
     marginBottom: '16px'
   },
-  filterGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px'
-  },
-  filterLabel: {
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#333'
-  },
+  filterGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  filterLabel: { fontSize: '13px', fontWeight: '600', color: '#333' },
   searchInput: {
     padding: '10px 12px',
     border: '1px solid #ddd',
@@ -523,10 +462,7 @@ const styles = {
     border: '1px solid #ddd', fontSize: '14px',
     boxSizing: 'border-box', height: '100px', resize: 'vertical'
   },
-  formActions: {
-    display: 'flex',
-    gap: '12px'
-  },
+  formActions: { display: 'flex', gap: '12px' },
   submitBtn: {
     padding: '10px 24px', backgroundColor: '#4f46e5',
     color: '#fff', border: 'none', borderRadius: '8px',
@@ -573,19 +509,8 @@ const styles = {
     fontWeight: '600',
     whiteSpace: 'nowrap'
   },
-  badgeShared: {
-    display: 'inline-block',
-    padding: '4px 10px',
-    backgroundColor: '#d1fae5',
-    color: '#059669',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: '600',
-    whiteSpace: 'nowrap'
-  },
   cardDesc: { color: '#666', fontSize: '14px', margin: '0 0 10px', lineHeight: '1.5' },
   cardDate: { color: '#999', fontSize: '12px', margin: '0 0 8px' },
-  sharedCount: { color: '#10b981', fontSize: '12px', margin: '0 0 16px', fontWeight: '600' },
   btnRow: { display: 'flex', gap: '10px', marginTop: '16px' },
   viewBtn: {
     padding: '8px 12px', backgroundColor: '#eef2ff',
@@ -594,10 +519,16 @@ const styles = {
     flex: 1, transition: 'all 0.2s'
   },
   shareBtn: {
-    padding: '8px 12px', backgroundColor: '#10b981',
-    color: '#fff', border: 'none', borderRadius: '6px',
-    cursor: 'pointer', fontSize: '12px', fontWeight: '600',
-    flex: 1, transition: 'all 0.2s'
+    padding: '8px 12px',
+    backgroundColor: '#10b981',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '600',
+    flex: 1,
+    transition: 'all 0.2s'
   }
 }
 

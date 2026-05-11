@@ -1,14 +1,24 @@
 const Feedback = require('../models/Feedback');
+const Version = require('../models/Version');
+const User = require('../models/User');
+const { createNotificationInternal } = require('./notificationController');
 
 // CREATE FEEDBACK
 exports.createFeedback = async (req, res) => {
   try {
+    console.log('📝 Creating feedback...');
+    console.log('Request body:', req.body);
+    console.log('User ID:', req.userId);
+    
     const { versionId, comment, rating } = req.body;
 
     if (!versionId || !comment || !rating) {
+      console.error('❌ Missing fields:', { versionId, comment, rating });
       return res.status(400).json({ message: 'All fields are required' });
     }
 
+    console.log('✅ All fields present');
+    
     const feedback = await Feedback.create({
       version: versionId,
       reviewer: req.userId,
@@ -16,10 +26,38 @@ exports.createFeedback = async (req, res) => {
       rating
     });
 
+    console.log('✅ Feedback created:', feedback._id);
+
     await feedback.populate('reviewer', 'name email role');
+
+    // ✅ CREATE NOTIFICATION FOR VERSION UPLOADER
+    try {
+      const version = await Version.findById(versionId).populate('uploadedBy', '_id name email');
+      
+      if (version && version.uploadedBy) {
+        const uploader = version.uploadedBy;
+        const reviewer = await User.findById(req.userId);
+
+        if (uploader._id.toString() !== req.userId) {
+          await createNotificationInternal(
+            uploader._id,
+            req.userId,
+            'feedback_received',
+            'New Feedback Received',
+            `${reviewer.name} gave feedback: "${comment}"`,
+            version.project,
+            versionId
+          );
+        }
+      }
+    } catch (notifErr) {
+      console.error('⚠️ Notification creation error:', notifErr.message);
+    }
 
     res.status(201).json(feedback);
   } catch (error) {
+    console.error('❌ Create feedback error:', error.message);
+    console.error('Stack:', error.stack);
     res.status(500).json({ message: error.message });
   }
 };
@@ -65,7 +103,7 @@ exports.addReply = async (req, res) => {
       return res.status(400).json({ message: 'Comment is required' });
     }
 
-    const feedback = await Feedback.findById(feedbackId);
+    const feedback = await Feedback.findById(feedbackId).populate('reviewer', '_id name email');
 
     if (!feedback) {
       return res.status(404).json({ message: 'Feedback not found' });
@@ -79,6 +117,25 @@ exports.addReply = async (req, res) => {
     await feedback.save();
     await feedback.populate('reviewer', 'name email role');
     await feedback.populate('replies.author', 'name email role');
+
+    // ✅ CREATE NOTIFICATION FOR FEEDBACK AUTHOR
+    try {
+      if (feedback.reviewer._id.toString() !== req.userId) {
+        const replier = await User.findById(req.userId);
+        
+        await createNotificationInternal(
+          feedback.reviewer._id,
+          req.userId,
+          'reply_to_feedback',
+          'Reply to Your Feedback',
+          `${replier.name} replied: "${comment}"`,
+          null,
+          feedback.version
+        );
+      }
+    } catch (notifErr) {
+      console.error('⚠️ Notification creation error:', notifErr.message);
+    }
 
     res.status(201).json(feedback);
   } catch (error) {

@@ -14,7 +14,11 @@ exports.getProjects = async (req, res) => {
       ]
     })
     .populate('createdBy', 'name email')
-    .populate('sharedWith', 'name email role')
+    .populate({
+      path: 'sharedWith',
+      select: 'name email role',
+      match: { role: 'reviewer' }  // ← ONLY reviewers
+    })
     .sort({ createdAt: -1 });
 
     console.log('✅ Projects fetched:', projects.length);
@@ -63,7 +67,11 @@ exports.getProject = async (req, res) => {
 
     const project = await Project.findById(req.params.id)
       .populate('createdBy', 'name email')
-      .populate('sharedWith', 'name email role');
+      .populate({
+        path: 'sharedWith',
+        select: 'name email role',
+        match: { role: 'reviewer' }  // ← ONLY reviewers
+      });
 
     if (!project) {
       return res.status(404).json({ message: 'Project not found' });
