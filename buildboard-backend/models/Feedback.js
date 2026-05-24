@@ -1,46 +1,37 @@
 const mongoose = require('mongoose');
 
-const ReplySchema = new mongoose.Schema({
-  author: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+const feedbackSchema = new mongoose.Schema(
+  {
+    versionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Version',
+      required: true
+    },
+    reviewerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    comment: {
+      type: String,
+      required: true
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'in_progress', 'resolved'],
+      default: 'pending'
+    },
+    isFlagged: {
+      type: Boolean,
+      default: false
+    },
+    flagReason: String,
+    flaggedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
   },
-  comment: {
-    type: String,
-    required: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+  { timestamps: true }
+);
 
-const FeedbackSchema = new mongoose.Schema({
-  version: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Version',
-    required: true
-  },
-  reviewer: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  comment: {
-    type: String,
-    required: true
-  },
-  rating: {
-    type: Number,
-    enum: [1, 2, 3, 4, 5],
-    required: true
-  },
-  replies: [ReplySchema],
-  read: {
-    type: Boolean,
-    default: false
-  }
-}, { timestamps: true });
-
-module.exports = mongoose.model('Feedback', FeedbackSchema);
+module.exports = mongoose.model('Feedback', feedbackSchema);

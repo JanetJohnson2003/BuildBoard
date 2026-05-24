@@ -1,177 +1,166 @@
 const Feedback = require('../models/Feedback');
 const Version = require('../models/Version');
+const Project = require('../models/Project');
 const User = require('../models/User');
-const { createNotificationInternal } = require('./notificationController');
+
+// ✅ Helper: Get user ID
+const getUserId = (req) => {
+  return req.user?.id || req.userId;
+};
+
+// GET FEEDBACK BY VERSION ID
+exports.getFeedbackByVersion = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { versionId } = req.params;
+
+    console.log('📥 Getting feedback for version:', versionId);
+
+    // Find version
+    const version = await Version.findById(versionId).populate('projectId');
+    if (!version) {
+      return res.status(404).json({ message: 'Version not found' });
+    }
+
+    // Check authorization
+    const project = version.projectId;
+    const isOwner = project.createdBy.toString() === userId;
+    const isSharedWith = project.sharedWith.some(id => id.toString() === userId);
+
+    if (!isOwner && !isSharedWith) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Get feedback
+    const feedback = await Feedback.find({ versionId })
+      .populate('reviewerId', 'name email')
+      .sort({ createdAt: -1 });
+
+    console.log('✅ Feedback fetched:', feedback.length);
+    res.json(feedback);
+  } catch (error) {
+    console.error('❌ Error fetching feedback:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 // CREATE FEEDBACK
 exports.createFeedback = async (req, res) => {
   try {
-    console.log('📝 Creating feedback...');
-    console.log('Request body:', req.body);
-    console.log('User ID:', req.userId);
-    
-    const { versionId, comment, rating } = req.body;
+    const userId = getUserId(req);
+    const { versionId, comment, status } = req.body;
 
-    if (!versionId || !comment || !rating) {
-      console.error('❌ Missing fields:', { versionId, comment, rating });
-      return res.status(400).json({ message: 'All fields are required' });
+    console.log('💬 Creating feedback...');
+    console.log('💬 Version ID:', versionId);
+    console.log('💬 User ID:', userId);
+
+    // Validation
+    if (!versionId || !comment) {
+      return res.status(400).json({ 
+        message: 'Version ID and comment are required' 
+      });
     }
 
-    console.log('✅ All fields present');
-    
+    // Find version
+    const version = await Version.findById(versionId).populate('projectId');
+    if (!version) {
+      return res.status(404).json({ message: 'Version not found' });
+    }
+
+    // Create feedback
     const feedback = await Feedback.create({
-      version: versionId,
-      reviewer: req.userId,
+      versionId,
+      reviewerId: userId,
       comment,
-      rating
+      status: status || 'pending'
     });
+
+    await feedback.populate('reviewerId', 'name email');
 
     console.log('✅ Feedback created:', feedback._id);
-
-    await feedback.populate('reviewer', 'name email role');
-
-    // ✅ CREATE NOTIFICATION FOR VERSION UPLOADER
-    try {
-      const version = await Version.findById(versionId).populate('uploadedBy', '_id name email');
-      
-      if (version && version.uploadedBy) {
-        const uploader = version.uploadedBy;
-        const reviewer = await User.findById(req.userId);
-
-        if (uploader._id.toString() !== req.userId) {
-          await createNotificationInternal(
-            uploader._id,
-            req.userId,
-            'feedback_received',
-            'New Feedback Received',
-            `${reviewer.name} gave feedback: "${comment}"`,
-            version.project,
-            versionId
-          );
-        }
-      }
-    } catch (notifErr) {
-      console.error('⚠️ Notification creation error:', notifErr.message);
-    }
-
-    res.status(201).json(feedback);
+    res.status(201).json({
+      message: 'Feedback submitted successfully',
+      feedback
+    });
   } catch (error) {
     console.error('❌ Create feedback error:', error.message);
-    console.error('Stack:', error.stack);
     res.status(500).json({ message: error.message });
   }
 };
 
-// GET FEEDBACK BY VERSION
-exports.getFeedbackByVersion = async (req, res) => {
+// GET FEEDBACK BY ID
+exports.getFeedbackById = async (req, res) => {
   try {
-    const { versionId } = req.params;
-
-    const feedbacks = await Feedback.find({ version: versionId })
-      .populate('reviewer', 'name email role')
-      .populate('replies.author', 'name email role')
-      .sort({ createdAt: -1 });
-
-    res.json(feedbacks);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// GET ALL FEEDBACK
-exports.getAllFeedback = async (req, res) => {
-  try {
-    const feedbacks = await Feedback.find()
-      .populate('reviewer', 'name email role')
-      .populate('replies.author', 'name email role')
-      .populate('version')
-      .sort({ createdAt: -1 });
-
-    res.json(feedbacks);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ADD REPLY TO FEEDBACK
-exports.addReply = async (req, res) => {
-  try {
+    const userId = getUserId(req);
     const { feedbackId } = req.params;
-    const { comment } = req.body;
 
-    if (!comment) {
-      return res.status(400).json({ message: 'Comment is required' });
-    }
-
-    const feedback = await Feedback.findById(feedbackId).populate('reviewer', '_id name email');
-
-    if (!feedback) {
-      return res.status(404).json({ message: 'Feedback not found' });
-    }
-
-    feedback.replies.push({
-      author: req.userId,
-      comment
-    });
-
-    await feedback.save();
-    await feedback.populate('reviewer', 'name email role');
-    await feedback.populate('replies.author', 'name email role');
-
-    // ✅ CREATE NOTIFICATION FOR FEEDBACK AUTHOR
-    try {
-      if (feedback.reviewer._id.toString() !== req.userId) {
-        const replier = await User.findById(req.userId);
-        
-        await createNotificationInternal(
-          feedback.reviewer._id,
-          req.userId,
-          'reply_to_feedback',
-          'Reply to Your Feedback',
-          `${replier.name} replied: "${comment}"`,
-          null,
-          feedback.version
-        );
-      }
-    } catch (notifErr) {
-      console.error('⚠️ Notification creation error:', notifErr.message);
-    }
-
-    res.status(201).json(feedback);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// DELETE REPLY
-exports.deleteReply = async (req, res) => {
-  try {
-    const { feedbackId, replyId } = req.params;
-
-    const feedback = await Feedback.findById(feedbackId);
+    const feedback = await Feedback.findById(feedbackId)
+      .populate('reviewerId', 'name email')
+      .populate({
+        path: 'versionId',
+        populate: {
+          path: 'projectId'
+        }
+      });
 
     if (!feedback) {
       return res.status(404).json({ message: 'Feedback not found' });
     }
 
-    const reply = feedback.replies.id(replyId);
+    // Check authorization
+    const project = feedback.versionId.projectId;
+    const isOwner = project.createdBy.toString() === userId;
+    const isReviewer = feedback.reviewerId._id.toString() === userId;
 
-    if (!reply) {
-      return res.status(404).json({ message: 'Reply not found' });
+    if (!isOwner && !isReviewer) {
+      return res.status(403).json({ message: 'Access denied' });
     }
-
-    if (reply.author.toString() !== req.userId) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
-    feedback.replies.id(replyId).deleteOne();
-    await feedback.save();
-
-    await feedback.populate('reviewer', 'name email role');
-    await feedback.populate('replies.author', 'name email role');
 
     res.json(feedback);
   } catch (error) {
+    console.error('❌ Get feedback error:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// UPDATE FEEDBACK
+exports.updateFeedback = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { feedbackId } = req.params;
+    const { comment, status } = req.body;
+
+    console.log('✏️ Updating feedback:', feedbackId);
+
+    const feedback = await Feedback.findById(feedbackId).populate('versionId');
+
+    if (!feedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+
+    // Check authorization - only creator or project owner can update
+    const version = await Version.findById(feedback.versionId).populate('projectId');
+    const isOwner = version.projectId.createdBy.toString() === userId;
+    const isCreator = feedback.reviewerId.toString() === userId;
+
+    if (!isOwner && !isCreator) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Update fields
+    if (comment) feedback.comment = comment;
+    if (status) feedback.status = status;
+
+    await feedback.save();
+    await feedback.populate('reviewerId', 'name email');
+
+    console.log('✅ Feedback updated');
+    res.json({
+      message: 'Feedback updated successfully',
+      feedback
+    });
+  } catch (error) {
+    console.error('❌ Update feedback error:', error.message);
     res.status(500).json({ message: error.message });
   }
 };
@@ -179,20 +168,32 @@ exports.deleteReply = async (req, res) => {
 // DELETE FEEDBACK
 exports.deleteFeedback = async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { feedbackId } = req.params;
-    const feedback = await Feedback.findById(feedbackId);
+
+    console.log('🗑️ Deleting feedback:', feedbackId);
+
+    const feedback = await Feedback.findById(feedbackId).populate('versionId');
 
     if (!feedback) {
       return res.status(404).json({ message: 'Feedback not found' });
     }
 
-    if (feedback.reviewer.toString() !== req.userId) {
-      return res.status(403).json({ message: 'Not authorized' });
+    // Check authorization
+    const version = await Version.findById(feedback.versionId).populate('projectId');
+    const isOwner = version.projectId.createdBy.toString() === userId;
+    const isCreator = feedback.reviewerId.toString() === userId;
+
+    if (!isOwner && !isCreator) {
+      return res.status(403).json({ message: 'Access denied' });
     }
 
     await Feedback.findByIdAndDelete(feedbackId);
-    res.json({ message: 'Feedback deleted' });
+
+    console.log('✅ Feedback deleted');
+    res.json({ message: 'Feedback deleted successfully' });
   } catch (error) {
+    console.error('❌ Delete feedback error:', error.message);
     res.status(500).json({ message: error.message });
   }
 };

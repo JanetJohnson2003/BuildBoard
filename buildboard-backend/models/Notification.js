@@ -13,7 +13,12 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['project_shared', 'feedback_added', 'version_uploaded'],
+    enum: [
+      'feedback_received',
+      'version_uploaded',
+      'reply_to_feedback',
+      'project_shared' // ✅ ADD THIS
+    ],
     required: true
   },
   title: {
@@ -35,6 +40,10 @@ const NotificationSchema = new mongoose.Schema({
   read: {
     type: Boolean,
     default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
 }, { timestamps: true });
 

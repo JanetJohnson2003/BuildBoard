@@ -4,28 +4,36 @@ const auth = require('../middleware/authMiddleware');
 const {
   getProjects,
   createProject,
-  getProject,
+  deleteProject,
   shareProject,
-  removeAccess,
-  deleteProject
+  removeShareAccess,
+  getSharedProjects,
+  getProjectById
 } = require('../controllers/projectController');
 
-// Get all projects
+// ✅ IMPORTANT: Put specific routes BEFORE /:id routes!
+
+// Get shared projects (specific route - must come first)
+router.get('/shared', auth, getSharedProjects);
+
+// Get all user's projects
 router.get('/', auth, getProjects);
 
 // Create project
 router.post('/', auth, createProject);
 
-// Get single project
-router.get('/:id', auth, getProject);
+// ✅ NOW put the /:id routes (general routes come last)
 
-// Share project with user
-router.post('/share', auth, shareProject);
-
-// Remove access
-router.post('/remove-access', auth, removeAccess);
+// Get single project by ID
+router.get('/:id', auth, getProjectById);
 
 // Delete project
 router.delete('/:id', auth, deleteProject);
+
+// Share project with users
+router.post('/:id/share', auth, shareProject);
+
+// Remove user from shared project
+router.delete('/:id/share/:userId', auth, removeShareAccess);
 
 module.exports = router;

@@ -1,36 +1,37 @@
 const mongoose = require('mongoose');
 
-const VersionSchema = new mongoose.Schema({
-  project: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project',
-    required: true
-  },
-  versionNumber: {
-    type: String,
-    required: true
-  },
-  releaseNotes: {
-    type: String,
-    default: ''
-  },
-  file: {
-    filename: String,
-    size: Number,
+const versionSchema = new mongoose.Schema(
+  {
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Project',
+      required: true
+    },
+    versionNumber: {
+      type: String,
+      required: true
+    },
+    releaseNotes: {
+      type: String,
+      default: ''
+    },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true  // ✅ MUST BE REQUIRED
+    },
+    file: {
+      fileName: String,
+      filePath: String,
+      fileSize: Number,
+      mimeType: String
+    },
     uploadedAt: {
       type: Date,
       default: Date.now
     }
   },
-  uploadedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-}, { timestamps: true });
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Version', VersionSchema);
+module.exports = mongoose.model('Version', versionSchema);

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import Toast from '../components/Toast'
 import Notifications from '../components/Notifications'
+import ShareModal from '../components/ShareModal'
 
 function Projects() {
   const [projects, setProjects] = useState([])
@@ -11,6 +12,10 @@ function Projects() {
   const [description, setDescription] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [toast, setToast] = useState(null)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState('')
@@ -20,6 +25,9 @@ function Projects() {
 
   const navigate = useNavigate()
   const token = localStorage.getItem('token')
+  
+  // ✅ Use ref to track if already fetched
+  const hasFetchedRef = useRef(false)
   
   const getUserData = () => {
     try {
@@ -33,37 +41,37 @@ function Projects() {
   
   const user = getUserData()
 
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type })
+  }
+
+  // ✅ INCREASED TIMEOUT to 15000
   const fetchProjects = useCallback(async () => {
     try {
       console.log('📥 Fetching projects...')
+      setLoading(true)
+      setError(null)
+      
       const res = await axios.get('http://localhost:5000/api/projects', {
-        headers: { Authorization: token }
+        headers: { 
+          Authorization: token,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000  // ✅ INCREASED FROM 8000 to 15000
       })
-      setProjects(res.data)
+      
       console.log('✅ Projects fetched:', res.data.length)
+      setProjects(res.data)
+      setLoading(false)
     } catch (err) {
-      showToast('Failed to load projects', 'error')
-      console.error('Error:', err.message)
+      console.error('❌ Error fetching projects:', err.message)
+      setError(err.message)
+      setLoading(false)
+      // Don't retry automatically - let user click retry
     }
   }, [token])
 
-  useEffect(() => {
-    if (!token || !user) {
-      navigate('/')
-    }
-  }, [token, user, navigate])
-
-  useEffect(() => {
-    if (token && user) {
-      fetchProjects()
-    }
-  }, [token, user, fetchProjects])
-
-  useEffect(() => {
-    applyFilters()
-  }, [projects, searchQuery, filterUser, filterDate])
-
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...projects]
 
     if (searchQuery.trim()) {
@@ -73,7 +81,7 @@ function Projects() {
       )
     }
 
-    if (filterUser === 'owned') {
+    if (filterUser === 'owned' && user) {
       filtered = filtered.filter(p => p.createdBy._id === user._id)
     }
 
@@ -91,7 +99,38 @@ function Projects() {
     }
 
     setFilteredProjects(filtered)
-  }
+  }, [projects, searchQuery, filterUser, filterDate, user])
+
+  // ✅ FETCH ONLY ONCE on mount
+  useEffect(() => {
+    console.log('📍 Projects component mounted')
+    
+    if (!token || !user) {
+      console.log('❌ No token or user, redirecting to login')
+      navigate('/')
+      return
+    }
+
+    // ✅ Only fetch if not already fetched
+    if (!hasFetchedRef.current) {
+      console.log('🔍 First time mounting - fetching projects')
+      hasFetchedRef.current = true
+      fetchProjects()
+    } else {
+      console.log('⏭️ Already fetched - skipping')
+      setLoading(false)
+    }
+
+    return () => {
+      console.log('🧹 Projects component unmounting')
+    }
+  }, [])  // ✅ EMPTY dependencies - mount only!
+
+  // ✅ Apply filters when projects change
+  useEffect(() => {
+    console.log('🔍 Applying filters')
+    applyFilters()
+  }, [projects, searchQuery, filterUser, filterDate])
 
   const handleCreate = async () => {
     if (!title) return showToast('Please enter project title', 'error')
@@ -113,13 +152,8 @@ function Projects() {
   }
 
   const handleShare = (projectId) => {
-    const link = `${window.location.origin}/versions/${projectId}`
-    navigator.clipboard.writeText(link)
-    showToast('Link copied to clipboard! 📋', 'success')
-  }
-
-  const showToast = (message, type = 'info') => {
-    setToast({ message, type })
+    setSelectedProjectId(projectId)
+    setShowShareModal(true)
   }
 
   const handleLogout = () => {
@@ -140,6 +174,47 @@ function Projects() {
     return null
   }
 
+  // ✅ Show loading state
+  if (loading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.navbar}>
+          <h2 style={styles.logo}>BuildBoard+</h2>
+        </div>
+        <div style={styles.body}>
+          <div style={styles.loadingBox}>
+            <p>⏳ Loading projects...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ Show error state
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.navbar}>
+          <h2 style={styles.logo}>BuildBoard+</h2>
+        </div>
+        <div style={styles.body}>
+          <div style={styles.errorBox}>
+            <p>❌ {error}</p>
+            <button 
+              style={styles.retryBtn}
+              onClick={() => {
+                hasFetchedRef.current = false
+                window.location.reload()
+              }}
+            >
+              🔄 Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={styles.container}>
       {toast && (
@@ -150,12 +225,18 @@ function Projects() {
         />
       )}
 
+      {/* ✅ NAVBAR */}
       <div style={styles.navbar}>
         <h2 style={styles.logo}>BuildBoard+</h2>
         <div style={styles.navRight}>
           <button 
             style={styles.analyticsBtn} 
-            onClick={() => navigate('/analytics')}
+            onClick={() => {
+              console.log('📊 Navigating to analytics...')
+              setShowForm(false)
+              setShowFilters(false)
+              navigate('/analytics')
+            }}
             title="View Analytics"
           >
             📊 Analytics
@@ -182,6 +263,19 @@ function Projects() {
             </button>
             <button style={styles.addBtn} onClick={() => setShowForm(!showForm)}>
               {showForm ? '✕ Cancel' : '+ New Project'}
+            </button>
+            
+            <button 
+              style={{...styles.addBtn, backgroundColor: '#10b981'}}
+              onClick={() => {
+                console.log('🔗 Navigating to shared projects...')
+                setShowForm(false)
+                setShowFilters(false)
+                navigate('/shared-projects')
+              }}
+              title="View projects shared with you"
+            >
+              📤 Shared Projects
             </button>
           </div>
         </div>
@@ -301,6 +395,11 @@ function Projects() {
                     day: 'numeric'
                   })}
                 </p>
+                {project.sharedWith && project.sharedWith.length > 0 && (
+                  <p style={styles.sharedInfo}>
+                    🔗 Shared with {project.sharedWith.length} user{project.sharedWith.length !== 1 ? 's' : ''}
+                  </p>
+                )}
                 <div style={styles.btnRow}>
                   <button
                     style={styles.viewBtn}
@@ -311,14 +410,28 @@ function Projects() {
                   <button
                     style={styles.shareBtn}
                     onClick={() => handleShare(project._id)}
-                    title="Copy project link"
+                    title="Share project"
                   >
-                    Share 🔗
+                    🔗 Share
                   </button>
                 </div>
               </div>
             ))}
           </div>
+        )}
+
+        {showShareModal && (
+          <ShareModal
+            projectId={selectedProjectId}
+            onClose={() => {
+              setShowShareModal(false)
+              setSelectedProjectId(null)
+            }}
+            onShare={() => {
+              fetchProjects()
+              showToast('✅ Project shared successfully!', 'success')
+            }}
+          />
         )}
       </div>
     </div>
@@ -353,6 +466,31 @@ const styles = {
     transition: 'all 0.2s'
   },
   body: { padding: '32px', maxWidth: '1400px', margin: '0 auto' },
+  loadingBox: {
+    textAlign: 'center',
+    padding: '60px 20px',
+    color: '#666',
+    fontSize: '18px'
+  },
+  errorBox: {
+    backgroundColor: '#fee',
+    border: '2px solid #ef4444',
+    borderRadius: '12px',
+    padding: '20px',
+    textAlign: 'center',
+    color: '#dc2626'
+  },
+  retryBtn: {
+    marginTop: '16px',
+    padding: '10px 20px',
+    backgroundColor: '#4f46e5',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600'
+  },
   topRow: {
     display: 'flex', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: '24px',
@@ -511,6 +649,12 @@ const styles = {
   },
   cardDesc: { color: '#666', fontSize: '14px', margin: '0 0 10px', lineHeight: '1.5' },
   cardDate: { color: '#999', fontSize: '12px', margin: '0 0 8px' },
+  sharedInfo: {
+    color: '#10b981',
+    fontSize: '12px',
+    margin: '0 0 12px',
+    fontWeight: '600'
+  },
   btnRow: { display: 'flex', gap: '10px', marginTop: '16px' },
   viewBtn: {
     padding: '8px 12px', backgroundColor: '#eef2ff',

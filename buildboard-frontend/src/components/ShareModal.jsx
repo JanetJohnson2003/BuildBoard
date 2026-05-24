@@ -1,289 +1,202 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
-function ShareModal({ projectId, projectTitle, token, onClose, onSuccess }) {
-  const [users, setUsers] = useState([])
-  const [selectedUsers, setSelectedUsers] = useState([])
-  const [sharedWithUsers, setSharedWithUsers] = useState([])
-  const [searchUser, setSearchUser] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+function ShareModal({ projectId, onClose, onShare }) {
+  const [users, setUsers] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [error, setError] = useState('');
 
-  // Load data only once per projectId
+  const token = localStorage.getItem('token');
+
+  // ✅ FIXED: Fetch users on mount only
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true)
-        console.log('📥 Loading reviewers and shared users...')
-        
-        // Fetch reviewers
-        const usersRes = await axios.get('http://localhost:5000/api/users', {
-          headers: { Authorization: token },
-          timeout: 5000
-        })
-        
-        setUsers(usersRes.data || [])
-        console.log('✅ Reviewers loaded:', usersRes.data?.length)
+    fetchUsers();
+  }, []); // ✅ EMPTY dependency array - fetch only once
 
-        // Fetch project to get currently shared users
-        try {
-          const projectRes = await axios.get(`http://localhost:5000/api/projects/${projectId}`, {
-            headers: { Authorization: token },
-            timeout: 5000
-          })
-          
-          const sharedUsers = projectRes.data.sharedWith || []
-          const filteredSharedUsers = sharedUsers.filter(u => u.role === 'reviewer')
-          setSharedWithUsers(filteredSharedUsers)
-          console.log('✅ Shared reviewers loaded:', filteredSharedUsers.length)
-        } catch (projectErr) {
-          console.warn('⚠️ Could not load shared users:', projectErr.message)
-          setSharedWithUsers([])
-        }
-        
-        setError('')
-      } catch (err) {
-        console.error('❌ Load error:', err.message)
-        setError('Failed to load reviewers')
-        setUsers([])
-        setSharedWithUsers([])
-      } finally {
-        setIsLoading(false)
-      }
+  // ✅ FIXED: Fetch users with increased timeout
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      console.log('📥 Fetching users...');
+      
+      const res = await axios.get('http://localhost:5000/api/users', {
+        headers: { 
+          Authorization: token,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000  // ✅ CHANGED FROM 5000 to 10000
+      });
+      
+      console.log('✅ Users fetched:', res.data.length);
+      setUsers(res.data);
+      setError('');
+    } catch (err) {
+      console.error('❌ Error fetching users:', err.message);
+      setError('Failed to load users');
+      setUsers([]);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    if (token && projectId) {
-      loadData()
-    }
-  }, [projectId, token])
-
-  // Filter users: search + exclude already shared
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchUser.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchUser.toLowerCase())
-    const alreadyShared = sharedWithUsers.some(su => su._id === user._id)
-    return matchesSearch && !alreadyShared
-  })
+  const filteredUsers = users.filter(user =>
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleSelectUser = (userId) => {
-    if (!selectedUsers.includes(userId)) {
-      setSelectedUsers([...selectedUsers, userId])
-    }
-  }
+    setSelectedUsers(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
 
-  const handleRemoveSelected = (userId) => {
-    setSelectedUsers(selectedUsers.filter(id => id !== userId))
-  }
-
-  const handleShareWithMultiple = async () => {
+  const handleShare = async () => {
     if (selectedUsers.length === 0) {
-      setError('Please select at least one reviewer')
-      return
+      setError('Please select at least one user');
+      return;
     }
 
     try {
-      setLoading(true)
-      setError('')
-      const shareCount = selectedUsers.length
+      setSharing(true);
+      console.log('📤 Sharing project with users:', selectedUsers);
 
-      console.log('🔄 Sharing with users:', selectedUsers)
+      const res = await axios.post(
+        `http://localhost:5000/api/projects/${projectId}/share`,
+        { sharedWith: selectedUsers },
+        { 
+          headers: { 
+            Authorization: token,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000  // ✅ INCREASED TIMEOUT for share endpoint too
+        }
+      );
 
-      // Share with each selected user
-      for (const userId of selectedUsers) {
-        await axios.post(
-          'http://localhost:5000/api/projects/share',
-          { projectId, userId },
-          { headers: { Authorization: token }, timeout: 5000 }
-        )
+      console.log('✅ Project shared successfully');
+      console.log(res.data);
+
+      if (onShare) {
+        onShare();
       }
 
-      console.log('✅ All shares completed!')
-      setSelectedUsers([])
-      setSearchUser('')
-      onSuccess(`Project shared with ${shareCount} user(s)!`)
-      
-      setTimeout(() => {
-        onClose()
-      }, 500)
+      onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to share project')
-      console.error('Share error:', err)
+      console.error('❌ Share error:', err);
+      setError(err.response?.data?.message || 'Failed to share project');
     } finally {
-      setLoading(false)
+      setSharing(false);
     }
-  }
-
-  const handleRemoveAccess = async (userId) => {
-    if (!window.confirm('Are you sure you want to remove this user\'s access?')) return
-
-    try {
-      console.log('🗑️ Removing access for user:', userId)
-
-      await axios.post(
-        'http://localhost:5000/api/projects/remove-access',
-        { projectId, userId },
-        { headers: { Authorization: token }, timeout: 5000 }
-      )
-
-      // Reload shared users after removal
-      const projectRes = await axios.get(`http://localhost:5000/api/projects/${projectId}`, {
-        headers: { Authorization: token }
-      })
-      
-      const sharedUsers = projectRes.data.sharedWith || []
-      const filteredSharedUsers = sharedUsers.filter(u => u.role === 'reviewer')
-      setSharedWithUsers(filteredSharedUsers)
-      
-      console.log('✅ Access removed!')
-      onSuccess('User access removed successfully!')
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to remove access')
-      console.error('Remove error:', err)
-    }
-  }
-
-  const selectedUserData = users.filter(u => selectedUsers.includes(u._id))
-
-  if (isLoading) {
-    return (
-      <div style={styles.overlay}>
-        <div style={styles.modal}>
-          <p style={{ textAlign: 'center', color: '#999', padding: '24px' }}>Loading...</p>
-        </div>
-      </div>
-    )
-  }
+  };
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.modal}>
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        
         <div style={styles.header}>
-          <h2 style={styles.title}>📤 Share Project</h2>
+          <h2 style={styles.title}>📤 Add More Reviewers</h2>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        <p style={styles.subtitle}>"{projectTitle}"</p>
-
-        {error && <div style={styles.errorMsg}>{error}</div>}
-
-        {/* Currently Shared With Section */}
-        {sharedWithUsers.length > 0 && (
-          <div style={styles.section}>
-            <h3 style={styles.sectionTitle}>👥 Currently Shared With ({sharedWithUsers.length})</h3>
-            <div style={styles.sharedUsersList}>
-              {sharedWithUsers.map((user) => (
-                <div key={user._id} style={styles.sharedUserItem}>
-                  <div style={styles.userInfo}>
-                    <div style={styles.userAvatar}>
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p style={styles.userName}>{user.name}</p>
-                      <p style={styles.userEmail}>{user.email}</p>
-                    </div>
-                  </div>
-                  <button
-                    style={styles.removeBtn}
-                    onClick={() => handleRemoveAccess(user._id)}
-                  >
-                    🗑️ Remove
-                  </button>
-                </div>
-              ))}
-            </div>
+        {error && (
+          <div style={styles.errorBox}>
+            <p style={styles.errorText}>{error}</p>
           </div>
         )}
 
-        {/* Add More Reviewers Section */}
-        <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>🔗 Add More Reviewers</h3>
+        <div style={styles.searchBox}>
+          <label style={styles.label}>Search Reviewers:</label>
+          <input
+            style={styles.searchInput}
+            type="text"
+            placeholder="Search by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            autoFocus
+          />
+        </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Search Reviewers:</label>
-            <input
-              style={styles.searchInput}
-              type="text"
-              placeholder="Search by name or email..."
-              value={searchUser}
-              onChange={(e) => setSearchUser(e.target.value)}
-            />
-          </div>
-
-          <div style={styles.availableUsers}>
-            {filteredUsers.length > 0 ? (
-              filteredUsers.map((user) => (
-                <div
-                  key={user._id}
-                  style={styles.userOption}
-                  onClick={() => handleSelectUser(user._id)}
-                >
-                  <div style={styles.userCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={selectedUsers.includes(user._id)}
-                      readOnly
-                      style={styles.checkbox}
-                    />
+        <div style={styles.usersContainer}>
+          {loading ? (
+            <p style={styles.loadingText}>⏳ Loading users...</p>
+          ) : filteredUsers.length === 0 ? (
+            <p style={styles.noUsersText}>❌ No users found</p>
+          ) : (
+            filteredUsers.map(user => (
+              <div key={user._id} style={styles.userItem}>
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.includes(user._id)}
+                  onChange={() => handleSelectUser(user._id)}
+                  style={styles.checkbox}
+                  id={`user-${user._id}`}
+                />
+                <label htmlFor={`user-${user._id}`} style={styles.userLabel}>
+                  <div>
+                    <p style={styles.userName}>{user.name}</p>
+                    <p style={styles.userEmail}>{user.email}</p>
                   </div>
-                  <div style={styles.userOptionInfo}>
-                    <p style={styles.optionName}>{user.name}</p>
-                    <p style={styles.optionEmail}>{user.email}</p>
-                  </div>
-                  <span style={styles.reviewerBadge}>Reviewer</span>
-                </div>
-              ))
-            ) : (
-              <p style={styles.noUsers}>
-                {users.length === 0 ? '📭 No reviewers available' : '✅ All reviewers already have access'}
-              </p>
-            )}
-          </div>
+                </label>
+                <span style={styles.userRole}>{user.role}</span>
+              </div>
+            ))
+          )}
+        </div>
 
-          {selectedUsers.length > 0 && (
-            <div style={styles.selectedSection}>
-              <h4 style={styles.selectedTitle}>
-                📝 To Be Shared ({selectedUsers.length})
-              </h4>
-              <div style={styles.selectedList}>
-                {selectedUserData.map((user) => (
-                  <div key={user._id} style={styles.selectedItem}>
-                    <span>{user.name}</span>
+        {selectedUsers.length > 0 && (
+          <div style={styles.selectedBox}>
+            <p style={styles.selectedLabel}>
+              📋 To Be Shared ({selectedUsers.length})
+            </p>
+            <div style={styles.selectedTags}>
+              {selectedUsers.map(userId => {
+                const user = users.find(u => u._id === userId);
+                return (
+                  <div key={userId} style={styles.tag}>
+                    <span>{user?.name}</span>
                     <button
-                      style={styles.removeSelectedBtn}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRemoveSelected(user._id)
-                      }}
+                      style={styles.tagCloseBtn}
+                      onClick={() => handleSelectUser(userId)}
                     >
                       ✕
                     </button>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div style={styles.actions}>
           <button
             style={{
               ...styles.shareBtn,
-              opacity: selectedUsers.length === 0 || loading ? 0.6 : 1,
-              cursor: selectedUsers.length === 0 || loading ? 'not-allowed' : 'pointer'
+              opacity: sharing || selectedUsers.length === 0 ? 0.6 : 1,
+              cursor: sharing ? 'not-allowed' : 'pointer'
             }}
-            onClick={handleShareWithMultiple}
-            disabled={selectedUsers.length === 0 || loading}
+            onClick={handleShare}
+            disabled={sharing || selectedUsers.length === 0}
           >
-            {loading ? 'Sharing...' : `✓ Share with ${selectedUsers.length} User${selectedUsers.length !== 1 ? 's' : ''}`}
+            {sharing ? '⏳ Sharing...' : `✓ Share with ${selectedUsers.length} User${selectedUsers.length !== 1 ? 's' : ''}`}
           </button>
-          <button style={styles.cancelBtn} onClick={onClose}>
+          <button
+            style={styles.cancelBtn}
+            onClick={onClose}
+            disabled={sharing}
+          >
             Cancel
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 const styles = {
@@ -293,7 +206,7 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -302,25 +215,25 @@ const styles = {
   modal: {
     backgroundColor: '#fff',
     borderRadius: '12px',
-    padding: '32px',
-    maxWidth: '600px',
+    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
     width: '90%',
+    maxWidth: '500px',
     maxHeight: '80vh',
-    overflowY: 'auto',
-    boxShadow: '0 20px 50px rgba(0,0,0,0.2)'
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden'
   },
   header: {
+    padding: '20px',
+    borderBottom: '1px solid #eee',
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '8px',
-    borderBottom: '2px solid #f0f0f0',
-    paddingBottom: '16px'
+    alignItems: 'center'
   },
   title: {
     margin: 0,
-    fontSize: '22px',
-    fontWeight: '700',
+    fontSize: '18px',
+    fontWeight: '600',
     color: '#333'
   },
   closeBtn: {
@@ -328,219 +241,166 @@ const styles = {
     border: 'none',
     fontSize: '24px',
     cursor: 'pointer',
-    color: '#999'
+    color: '#999',
+    padding: 0,
+    width: '30px',
+    height: '30px'
   },
-  subtitle: {
-    margin: '16px 0 24px',
+  errorBox: {
+    padding: '12px 20px',
+    backgroundColor: '#fee',
+    borderLeft: '4px solid #ef4444'
+  },
+  errorText: {
+    margin: 0,
+    color: '#c33',
     fontSize: '14px',
-    color: '#888',
-    fontStyle: 'italic'
+    fontWeight: '500'
   },
-  errorMsg: {
-    padding: '12px 16px',
-    backgroundColor: '#fee2e2',
-    color: '#c3103b',
-    borderRadius: '8px',
-    marginBottom: '16px',
-    fontSize: '13px',
-    fontWeight: '600'
-  },
-  section: {
-    marginBottom: '24px'
-  },
-  sectionTitle: {
-    margin: '0 0 16px',
-    fontSize: '15px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  formGroup: {
-    marginBottom: '16px'
+  searchBox: {
+    padding: '16px 20px',
+    borderBottom: '1px solid #eee'
   },
   label: {
     display: 'block',
-    marginBottom: '8px',
     fontSize: '13px',
     fontWeight: '600',
-    color: '#333'
+    color: '#333',
+    marginBottom: '8px'
   },
   searchInput: {
     width: '100%',
     padding: '10px 12px',
     border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box'
+    borderRadius: '6px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit'
   },
-  sharedUsersList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px'
+  usersContainer: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '12px'
   },
-  sharedUserItem: {
-    padding: '12px 16px',
-    backgroundColor: '#f0fdf4',
-    borderRadius: '8px',
-    border: '1px solid #bbf7d0',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+  loadingText: {
+    textAlign: 'center',
+    padding: '20px',
+    color: '#999',
+    fontSize: '14px',
+    margin: 0
   },
-  userInfo: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'center',
-    flex: 1
+  noUsersText: {
+    textAlign: 'center',
+    padding: '20px',
+    color: '#999',
+    fontSize: '14px',
+    margin: 0
   },
-  userAvatar: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    backgroundColor: '#10b981',
-    color: '#fff',
+  userItem: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 'bold'
+    padding: '12px',
+    borderRadius: '6px',
+    marginBottom: '8px',
+    border: '1px solid #eee',
+    cursor: 'pointer',
+    backgroundColor: '#fafafa'
+  },
+  checkbox: {
+    width: '18px',
+    height: '18px',
+    cursor: 'pointer',
+    marginRight: '12px',
+    accentColor: '#4f46e5'
+  },
+  userLabel: {
+    flex: 1,
+    cursor: 'pointer',
+    margin: 0
   },
   userName: {
-    margin: '0 0 4px',
-    fontSize: '13px',
+    margin: '0 0 2px',
+    fontSize: '14px',
     fontWeight: '600',
     color: '#333'
   },
   userEmail: {
     margin: 0,
     fontSize: '12px',
-    color: '#888'
+    color: '#999'
   },
-  removeBtn: {
-    padding: '6px 12px',
-    backgroundColor: '#fee2e2',
-    color: '#c3103b',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600'
-  },
-  availableUsers: {
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    maxHeight: '250px',
-    overflowY: 'auto',
-    marginBottom: '16px'
-  },
-  userOption: {
-    padding: '12px 16px',
-    borderBottom: '1px solid #f3f4f6',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    transition: 'background-color 0.2s'
-  },
-  userCheckbox: {
-    display: 'flex',
-    alignItems: 'center'
-  },
-  checkbox: {
-    cursor: 'pointer'
-  },
-  userOptionInfo: {
-    flex: 1
-  },
-  optionName: {
-    margin: '0 0 4px',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  optionEmail: {
-    margin: 0,
-    fontSize: '12px',
-    color: '#888'
-  },
-  reviewerBadge: {
-    padding: '2px 8px',
-    backgroundColor: '#dbeafe',
-    color: '#1e40af',
+  userRole: {
+    display: 'inline-block',
+    padding: '4px 8px',
+    backgroundColor: '#eef2ff',
+    color: '#4f46e5',
     borderRadius: '4px',
     fontSize: '11px',
-    fontWeight: '600'
+    fontWeight: '600',
+    whiteSpace: 'nowrap'
   },
-  noUsers: {
-    padding: '24px',
-    textAlign: 'center',
-    color: '#999',
-    fontSize: '13px',
-    margin: 0
+  selectedBox: {
+    padding: '16px 20px',
+    backgroundColor: '#f0fdf4',
+    borderTop: '1px solid #dcfce7'
   },
-  selectedSection: {
-    padding: '12px 16px',
-    backgroundColor: '#eef2ff',
-    borderRadius: '8px',
-    border: '1px solid #c7d2fe'
-  },
-  selectedTitle: {
+  selectedLabel: {
     margin: '0 0 12px',
     fontSize: '13px',
     fontWeight: '600',
-    color: '#4f46e5'
+    color: '#166534'
   },
-  selectedList: {
+  selectedTags: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px'
   },
-  selectedItem: {
+  tag: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
     padding: '6px 12px',
     backgroundColor: '#4f46e5',
     color: '#fff',
-    borderRadius: '6px',
+    borderRadius: '20px',
     fontSize: '12px',
-    fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px'
+    fontWeight: '600'
   },
-  removeSelectedBtn: {
+  tagCloseBtn: {
     background: 'none',
     border: 'none',
     color: '#fff',
     cursor: 'pointer',
     fontSize: '14px',
-    padding: '0'
+    padding: 0
   },
   actions: {
+    padding: '16px 20px',
+    borderTop: '1px solid #eee',
     display: 'flex',
-    gap: '12px',
-    marginTop: '24px',
-    borderTop: '1px solid #f0f0f0',
-    paddingTop: '16px'
+    gap: '12px'
   },
   shareBtn: {
     flex: 1,
-    padding: '12px 24px',
+    padding: '12px 20px',
     backgroundColor: '#10b981',
     color: '#fff',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '600'
   },
   cancelBtn: {
     flex: 1,
-    padding: '12px 24px',
+    padding: '12px 20px',
     backgroundColor: '#e5e7eb',
     color: '#666',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '14px'
   }
-}
+};
 
-export default ShareModal
+export default ShareModal;

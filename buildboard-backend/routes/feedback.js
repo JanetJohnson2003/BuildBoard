@@ -1,31 +1,40 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
-const {
-  createFeedback,
-  getFeedbackByVersion,
-  getAllFeedback,
-  addReply,
-  deleteReply,
-  deleteFeedback
-} = require('../controllers/feedbackController');
+const feedbackController = require('../controllers/feedbackController');
 
-// Create feedback
-router.post('/', auth, createFeedback);
+console.log('✅ Feedback routes loading...');
 
-// Get feedback by version
-router.get('/:versionId', auth, getFeedbackByVersion);
+// ✅ GET feedback by version ID
+router.get('/version/:versionId', auth, (req, res, next) => {
+  console.log('📥 GET /version/:versionId route hit');
+  feedbackController.getFeedbackByVersion(req, res, next);
+});
 
-// Get all feedback
-router.get('/', auth, getAllFeedback);
+// ✅ POST - Create feedback
+router.post('/', auth, (req, res, next) => {
+  console.log('💬 POST / route hit');
+  feedbackController.createFeedback(req, res, next);
+});
 
-// Add reply to feedback
-router.post('/:feedbackId/reply', auth, addReply);
+// ✅ GET feedback by ID
+router.get('/:feedbackId', auth, (req, res, next) => {
+  console.log('📖 GET /:feedbackId route hit');
+  feedbackController.getFeedbackById(req, res, next);
+});
 
-// Delete reply
-router.delete('/:feedbackId/reply/:replyId', auth, deleteReply);
+// ✅ PUT - Update feedback
+router.put('/:feedbackId', auth, (req, res, next) => {
+  console.log('✏️ PUT /:feedbackId route hit');
+  feedbackController.updateFeedback(req, res, next);
+});
 
-// Delete feedback
-router.delete('/:feedbackId', auth, deleteFeedback);
+// ✅ DELETE - Delete feedback
+router.delete('/:feedbackId', auth, (req, res, next) => {
+  console.log('🗑️ DELETE /:feedbackId route hit');
+  feedbackController.deleteFeedback(req, res, next);
+});
+
+console.log('✅ Feedback routes loaded successfully');
 
 module.exports = router;
