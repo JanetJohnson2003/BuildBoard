@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0969da;
+  --color-primary-dark: #58a6ff;
+  --color-success: #2da44e;
+  --color-success-dark: #238636;
+  --color-danger: #cf222e;
+  --color-danger-dark: #da3633;
+  --color-warning: #bf8700;
+  --color-warning-dark: #d29922;
+
+  --color-canvas-default: #ffffff;
+  --color-canvas-subtle: #f6f8fa;
+  --color-border-default: #d0d7de;
+  --color-border-muted: #d0d7de;
+
+  --color-fg-default: #24292f;
+  --color-fg-muted: #57606a;
+
+  --color-canvas-default-dark: #0d1117;
+  --color-canvas-subtle-dark: #161b22;
+  --color-border-default-dark: #30363d;
+  --color-border-muted-dark: #21262d;
+
+  --color-fg-default-dark: #c9d1d9;
+  --color-fg-muted-dark: #8b949e;
+}
+
+/* Base styles using CSS variables for theme support */
+:root {
+  --bg-main: var(--color-canvas-default);
+  --bg-subtle: var(--color-canvas-subtle);
+  --border-main: var(--color-border-default);
+  --border-subtle: var(--color-border-muted);
+  --text-main: var(--color-fg-default);
+  --text-muted: var(--color-fg-muted);
+  --brand-primary: var(--color-primary);
+  --brand-success: var(--color-success);
+  --brand-danger: var(--color-danger);
+  --brand-warning: var(--color-warning);
+}
+
+.dark {
+  --bg-main: var(--color-canvas-default-dark);
+  --bg-subtle: var(--color-canvas-subtle-dark);
+  --border-main: var(--color-border-default-dark);
+  --border-subtle: var(--color-border-muted-dark);
+  --text-main: var(--color-fg-default-dark);
+  --text-muted: var(--color-fg-muted-dark);
+  --brand-primary: var(--color-primary-dark);
+  --brand-success: var(--color-success-dark);
+  --brand-danger: var(--color-danger-dark);
+  --brand-warning: var(--color-warning-dark);
+}
+
+@layer base {
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .btn-primary {
+    @apply bg-[var(--brand-success)] text-white font-medium rounded-md px-4 py-1.5 border border-[rgba(27,31,36,0.15)] shadow-sm hover:bg-[#2c974b] transition-colors;
+  }
+  
+  .btn-secondary {
+    @apply bg-[var(--bg-subtle)] text-[var(--text-main)] font-medium rounded-md px-4 py-1.5 border border-[var(--border-main)] shadow-sm hover:bg-[rgba(208,215,222,0.32)] transition-colors;
+  }
+
+  .btn-danger {
+    @apply bg-[var(--bg-subtle)] text-[var(--brand-danger)] font-medium rounded-md px-4 py-1.5 border border-[var(--border-main)] shadow-sm hover:bg-[var(--brand-danger)] hover:text-white hover:border-transparent transition-colors;
+  }
+
+  .input-field {
+    @apply w-full rounded-md border border-[var(--border-main)] bg-[var(--bg-main)] px-3 py-1.5 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)];
+  }
+
+  .panel {
+    @apply rounded-md border border-[var(--border-main)] bg-[var(--bg-main)];
+  }
+
+  .panel-header {
+    @apply rounded-t-md border-b border-[var(--border-main)] bg-[var(--bg-subtle)] px-4 py-3;
+  }
+
+  .header-button {
+    @apply relative inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-1 rounded-md border border-[var(--border-main)] bg-[var(--bg-main)] px-2.5 text-[var(--text-muted)] shadow-sm transition-colors hover:bg-[rgba(208,215,222,0.32)] hover:text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)] focus:ring-offset-1 focus:ring-offset-[var(--bg-subtle)];
+  }
+
+  .header-button-active {
+    @apply border-[var(--brand-primary)] text-[var(--text-main)];
+  }
+
+  .header-button.group-button {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .header-button.group-button.compact {
+    min-width: 34px;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .header-button.hide-until-sm,
+  .header-button.hide-until-md {
+    display: none;
+  }
+
+  .github-search kbd {
+    @apply rounded border border-[var(--border-main)] bg-[var(--bg-subtle)] px-1.5 py-0.5 text-xs text-[var(--text-main)];
+  }
+
+  .contribution-0 {
+    background-color: var(--bg-subtle);
+  }
+
+  .contribution-1 {
+    background-color: rgba(45, 164, 78, 0.25);
+  }
+
+  .contribution-2 {
+    background-color: rgba(45, 164, 78, 0.45);
+  }
+
+  .contribution-3 {
+    background-color: rgba(45, 164, 78, 0.7);
+  }
+
+  .contribution-4 {
+    background-color: var(--brand-success);
+  }
+
+  .prose-buildboard h1,
+  .prose-buildboard h2,
+  .prose-buildboard h3 {
+    @apply mb-2 mt-4 font-semibold;
+  }
+
+  .prose-buildboard code,
+  .prose-buildboard pre {
+    @apply rounded bg-[var(--bg-subtle)] px-1 py-0.5 font-mono text-xs;
+  }
+}
+
+@media (min-width: 640px) {
+  .header-button.hide-until-sm {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 768px) {
+  .header-button.hide-until-md {
+    display: inline-flex;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-main);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+

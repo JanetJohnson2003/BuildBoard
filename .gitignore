@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Backend
+buildboard-backend/node_modules/
+buildboard-backend/.env
+buildboard-backend/uploads/
+
+# Frontend
+buildboard-frontend/node_modules/
+buildboard-frontend/dist/
+buildboard-frontend/.env
+
+# OS Files
+.DS_Store
+Thumbs.db
