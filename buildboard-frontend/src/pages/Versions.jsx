@@ -1,111 +1,67 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { useParams, useNavigate } from 'react-router-dom'
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import { GlassCard, NeonButton, CyberInput, CyberBadge, CyberSkeleton } from '../components/ui';
+import { 
+  Package, Upload, Download, Trash2, MessageSquare, 
+  ChevronLeft, Plus, X, AlertCircle, FileText, Calendar, User as UserIcon
+} from 'lucide-react';
+import { pageVariants, listVariants, itemVariants } from '../utils/animations';
 
 function Versions() {
-  const { projectId } = useParams()
-  const navigate = useNavigate()
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [versions, setVersions] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     versionNumber: '',
     releaseNotes: '',
     file: null
-  })
+  });
 
-  const token = localStorage.getItem('token')
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  // ✅ Fetch versions on mount
-  useEffect(() => {
-    if (!projectId) {
-      setError('No project ID provided')
-      setLoading(false)
-      return
-    }
-
-    fetchVersions()
-  }, [projectId])
-
-  // ✅ Fetch all versions for this project
-  const fetchVersions = async () => {
-    try {
-      console.log('📥 Fetching versions for project:', projectId)
-      setLoading(true)
-      setError(null)
-
+  // Fetch Versions
+  const { data: versions, isLoading, error } = useQuery({
+    queryKey: ['versions', projectId],
+    queryFn: async () => {
       const res = await axios.get(
         `http://localhost:5000/api/versions/${projectId}`,
         {
-          headers: {
-            Authorization: token,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000
+          headers: { Authorization: token }
         }
-      )
+      );
+      return res.data;
+    },
+    enabled: !!projectId
+  });
 
-      console.log('✅ Versions fetched:', res.data.length)
-      setVersions(res.data)
-      setLoading(false)
-    } catch (err) {
-      console.error('❌ Error fetching versions:', err.message)
-      setError(`Failed to load versions: ${err.message}`)
-      setLoading(false)
-    }
-  }
-
-  // ✅ Handle form input changes
+  // Handle form input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-  // ✅ Handle file selection
+  // Handle file selection
   const handleFileChange = (e) => {
-    const file = e.target.files[0]
+    const file = e.target.files[0];
     if (file) {
-      console.log('📄 File selected:', file.name)
-      setFormData(prev => ({
-        ...prev,
-        file: file
-      }))
+      setFormData(prev => ({ ...prev, file: file }));
     }
-  }
+  };
 
-  // ✅ Handle version upload - CORRECTED ENDPOINT!
-  const handleUpload = async (e) => {
-    e.preventDefault()
+  // Upload Mutation
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      const uploadFormData = new FormData();
+      uploadFormData.append('versionNumber', formData.versionNumber);
+      uploadFormData.append('releaseNotes', formData.releaseNotes);
+      uploadFormData.append('file', formData.file);
 
-    if (!formData.versionNumber.trim()) {
-      alert('Please enter version number')
-      return
-    }
-
-    if (!formData.file) {
-      alert('Please select a file')
-      return
-    }
-
-    try {
-      console.log('📦 Uploading version...')
-      console.log('📦 Version number:', formData.versionNumber)
-      console.log('📦 File name:', formData.file.name)
-      console.log('📦 Project ID:', projectId)
-
-      // ✅ Create FormData
-      const uploadFormData = new FormData()
-      uploadFormData.append('versionNumber', formData.versionNumber)
-      uploadFormData.append('releaseNotes', formData.releaseNotes)
-      uploadFormData.append('file', formData.file)
-
-      // ✅ CORRECT ENDPOINT - Include projectId in URL path!
       const res = await axios.post(
         `http://localhost:5000/api/versions/${projectId}`,
         uploadFormData,
@@ -113,551 +69,285 @@ function Versions() {
           headers: {
             Authorization: token,
             'Content-Type': 'multipart/form-data'
-          },
-          timeout: 30000
-        }
-      )
-
-      console.log('✅ Version uploaded:', res.data)
-      alert('✅ Version uploaded successfully!')
-
-      // Reset form
-      setFormData({
-        versionNumber: '',
-        releaseNotes: '',
-        file: null
-      })
-      setShowForm(false)
-
-      // Refresh versions list
-      fetchVersions()
-    } catch (err) {
-      console.error('❌ Upload error:', err.message)
-      console.error('❌ Error response:', err.response?.data)
-      alert(`Upload failed: ${err.response?.data?.message || err.message}`)
-    }
-  }
-
-  // ✅ Handle delete version
-  const handleDelete = async (versionId) => {
-    if (!window.confirm('Are you sure you want to delete this version?')) {
-      return
-    }
-
-    try {
-      console.log('🗑️ Deleting version:', versionId)
-
-      await axios.delete(
-        `http://localhost:5000/api/versions/${versionId}`,
-        {
-          headers: {
-            Authorization: token
           }
         }
-      )
-
-      console.log('✅ Version deleted')
-      alert('✅ Version deleted successfully!')
-      fetchVersions()
-    } catch (err) {
-      console.error('❌ Delete error:', err.message)
-      alert(`Delete failed: ${err.message}`)
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['versions', projectId]);
+      setFormData({ versionNumber: '', releaseNotes: '', file: null });
+      setShowForm(false);
     }
-  }
+  });
 
-  // ✅ Handle download
+  // Delete Mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (versionId) => {
+      await axios.delete(`http://localhost:5000/api/versions/${versionId}`, {
+        headers: { Authorization: token }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['versions', projectId]);
+    }
+  });
+
+  const handleUpload = (e) => {
+    e.preventDefault();
+    if (!formData.versionNumber.trim() || !formData.file) return;
+    uploadMutation.mutate();
+  };
+
+  const handleDelete = (versionId) => {
+    if (window.confirm('Delete this version? This action cannot be reversed.')) {
+      deleteMutation.mutate(versionId);
+    }
+  };
+
   const handleDownload = async (versionId, fileName) => {
     try {
-      console.log('⬇️ Downloading version:', versionId)
-
       const res = await axios.get(
         `http://localhost:5000/api/versions/download/${versionId}`,
         {
-          headers: {
-            Authorization: token
-          },
+          headers: { Authorization: token },
           responseType: 'blob'
         }
-      )
-
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([res.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', fileName || 'file')
-      document.body.appendChild(link)
-      link.click()
-      link.parentElement.removeChild(link)
-
-      console.log('✅ Download complete')
+      );
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName || 'file');
+      document.body.appendChild(link);
+      link.click();
+      link.parentElement.removeChild(link);
     } catch (err) {
-      console.error('❌ Download error:', err.message)
-      alert(`Download failed: ${err.message}`)
+      console.error('Download error:', err.message);
     }
-  }
+  };
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
-          <button style={styles.backBtn} onClick={() => navigate('/projects')}>
-            ← Back to Projects
-          </button>
+      <div className="p-8 max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center gap-4 mb-8">
+          <CyberSkeleton className="w-10 h-10 rounded-lg" />
+          <CyberSkeleton className="w-64 h-8" />
         </div>
-        <div style={styles.body}>
-          <p style={{ textAlign: 'center', marginTop: '40px' }}>⏳ Loading versions...</p>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map(i => <CyberSkeleton key={i} className="h-64 rounded-xl" />)}
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
     return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
-          <button style={styles.backBtn} onClick={() => navigate('/projects')}>
-            ← Back to Projects
-          </button>
-        </div>
-        <div style={styles.body}>
-          <div style={styles.errorBox}>
-            <p>❌ {error}</p>
-            <button style={styles.retryBtn} onClick={fetchVersions}>
-              🔄 Retry
-            </button>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[60vh] p-8">
+        <GlassCard glowColor="var(--brand-danger)" className="p-12 text-center max-w-md border-[var(--brand-danger)]/50 bg-[var(--brand-danger)]/5">
+          <AlertCircle size={48} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <h2 className="text-xl font-display font-bold text-white mb-2">SYSTEM_ERROR</h2>
+          <p className="text-sm font-mono text-[var(--text-muted)] mb-6">Failed to access version matrix.</p>
+          <NeonButton variant="ghost" onClick={() => navigate('/projects')}>RETURN_TO_PROJECTS</NeonButton>
+        </GlassCard>
       </div>
-    )
+    );
   }
 
   return (
-    <div style={styles.container}>
-      {/* ✅ NAVBAR */}
-      <div style={styles.navbar}>
-        <h2 style={styles.logo}>BuildBoard+</h2>
-        <div style={styles.navRight}>
-          <span style={styles.username}>👋 {user?.name}</span>
+    <motion.div 
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="max-w-7xl mx-auto p-4 md:p-8 space-y-8"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--glass-border)] pb-6">
+        <div className="flex items-center gap-4">
           <button 
-            style={styles.backBtn} 
             onClick={() => navigate('/projects')}
+            className="w-10 h-10 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:border-[var(--brand-primary)] transition-all group"
           >
-            ← Back to Projects
+            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           </button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-bold flex items-center gap-3 text-white">
+              <Package className="text-[var(--brand-primary)]" />
+              VERSION_MATRIX
+            </h1>
+            <p className="text-sm font-mono text-[var(--text-muted)] mt-1">
+              Project Identifier: <span className="text-[var(--brand-primary)]">{projectId}</span>
+            </p>
+          </div>
         </div>
+        
+        <NeonButton 
+          variant={showForm ? 'ghost' : 'primary'}
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2"
+        >
+          {showForm ? <><X size={16} /> ABORT_UPLOAD</> : <><Plus size={16} /> INITIALIZE_UPLOAD</>}
+        </NeonButton>
       </div>
 
-      {/* ✅ BODY */}
-      <div style={styles.body}>
-        <div style={styles.topRow}>
-          <h1 style={styles.title}>📦 Project Versions</h1>
-          <button
-            style={styles.addBtn}
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? '✕ Cancel' : '📤 Upload New Version'}
-          </button>
-        </div>
-
-        {/* ✅ UPLOAD FORM */}
+      <AnimatePresence>
         {showForm && (
-          <div style={styles.form}>
-            <h3 style={styles.formTitle}>📤 Upload New Version</h3>
-            
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Version Number *</label>
-              <input
-                type="text"
-                name="versionNumber"
-                placeholder="e.g., 1.0.0 or v2.1"
-                value={formData.versionNumber}
-                onChange={handleInputChange}
-                style={styles.input}
-                autoFocus
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Release Notes</label>
-              <textarea
-                name="releaseNotes"
-                placeholder="What's new in this version?"
-                value={formData.releaseNotes}
-                onChange={handleInputChange}
-                style={styles.textarea}
-                rows="4"
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Select File *</label>
-              <div style={styles.fileInputWrapper}>
-                <input
-                  type="file"
-                  onChange={handleFileChange}
-                  style={styles.fileInput}
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt"
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <GlassCard className="p-6 md:p-8 border-t-[var(--brand-success)] shadow-[0_10px_30px_rgba(0,255,136,0.1)] mb-8">
+              <h2 className="text-xl font-display font-bold mb-6 flex items-center gap-2">
+                <Upload className="text-[var(--brand-success)]" size={20} />
+                UPLOAD_NEW_BUILD
+              </h2>
+              
+              <div className="grid gap-6 md:grid-cols-2 mb-6">
+                <CyberInput
+                  label="Version Identifier"
+                  name="versionNumber"
+                  value={formData.versionNumber}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 1.0.0, v2.1-beta"
+                  className="font-mono"
                 />
-                <button 
-                  style={styles.chooseFileBtn}
-                  onClick={() => document.querySelector('input[type="file"]').click()}
-                >
-                  Choose File
-                </button>
-              </div>
-              {formData.file && (
-                <p style={styles.fileName}>✅ {formData.file.name}</p>
-              )}
-            </div>
-
-            <div style={styles.formActions}>
-              <button
-                style={styles.submitBtn}
-                onClick={handleUpload}
-              >
-                ✓ Upload Version
-              </button>
-              <button
-                style={styles.cancelBtn}
-                onClick={() => {
-                  setShowForm(false)
-                  setFormData({
-                    versionNumber: '',
-                    releaseNotes: '',
-                    file: null
-                  })
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ VERSIONS LIST */}
-        <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>📋 All Versions ({versions.length})</h2>
-
-          {versions.length === 0 ? (
-            <div style={styles.empty}>
-              <p>📭 No versions uploaded yet. Click "📤 Upload New Version" to start!</p>
-            </div>
-          ) : (
-            <div style={styles.grid}>
-              {versions.map((version) => (
-                <div key={version._id} style={styles.card}>
-                  <div style={styles.cardHeader}>
-                    <h3 style={styles.cardTitle}>📦 Version {version.versionNumber}</h3>
-                    <span style={styles.badge}>Uploaded</span>
-                  </div>
-
-                  <p style={styles.cardDesc}>
-                    {version.releaseNotes || '📝 No release notes'}
-                  </p>
-
-                  {version.file && (
-                    <div style={styles.fileInfo}>
-                      <p style={styles.fileName}>
-                        📄 {version.file.fileName}
-                      </p>
-                      <p style={styles.fileSize}>
-                        Size: {(version.file.fileSize / 1024).toFixed(2)} KB
-                      </p>
-                    </div>
-                  )}
-
-                  <p style={styles.cardDate}>
-                    📅 Uploaded: {new Date(version.uploadedAt).toLocaleString()}
-                  </p>
-
-                  {version.uploadedBy && (
-                    <p style={styles.uploadedBy}>
-                      👤 By: {version.uploadedBy.name}
-                    </p>
-                  )}
-
-                  <div style={styles.cardActions}>
-                    {version.file && (
-                      <button
-                        style={styles.downloadBtn}
-                        onClick={() => handleDownload(version._id, version.file.fileName)}
-                      >
-                        ⬇️ Download
-                      </button>
-                    )}
-                    <button
-                      style={styles.deleteBtn}
-                      onClick={() => handleDelete(version._id)}
+                
+                <div className="space-y-2">
+                  <label className="text-xs font-mono text-[var(--text-muted)] pl-1 block uppercase tracking-wider">
+                    Deployment Package
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="file-upload"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.zip,.tar.gz"
+                    />
+                    <label 
+                      htmlFor="file-upload"
+                      className={`flex items-center justify-between w-full p-3 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-main)]/50 cursor-pointer transition-all hover:border-[var(--brand-success)] hover:bg-[var(--brand-success)]/10 ${formData.file ? 'border-[var(--brand-success)] bg-[var(--brand-success)]/5' : ''}`}
                     >
-                      🗑️ Delete
-                    </button>
-                    <button
-                      style={styles.feedbackBtn}
-                      onClick={() => navigate(`/feedback/${version._id}`)}
-                    >
-                      💬 Feedback
-                    </button>
+                      <span className="font-mono text-sm truncate pr-4 text-[var(--text-main)]">
+                        {formData.file ? formData.file.name : 'Select file to upload...'}
+                      </span>
+                      <Upload size={16} className={formData.file ? 'text-[var(--brand-success)]' : 'text-[var(--text-muted)]'} />
+                    </label>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
+              </div>
 
-const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#f0f2f5' },
-  
-  navbar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '16px 32px',
-    backgroundColor: '#4f46e5',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-    flexShrink: 0
-  },
-  logo: { margin: 0, color: '#fff', fontSize: '24px', fontWeight: '700' },
-  navRight: { display: 'flex', alignItems: 'center', gap: '16px' },
-  username: { color: '#fff', fontSize: '14px', fontWeight: '500' },
-  backBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#fff',
-    color: '#4f46e5',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  },
+              <div className="mb-6 space-y-2">
+                <label className="text-xs font-mono text-[var(--text-muted)] pl-1 block uppercase tracking-wider">
+                  Release Diagnostics
+                </label>
+                <textarea
+                  name="releaseNotes"
+                  value={formData.releaseNotes}
+                  onChange={handleInputChange}
+                  placeholder="Detail the updates, patches, and features included in this build..."
+                  className="w-full bg-[var(--bg-main)]/50 border border-[var(--glass-border)] rounded-lg p-4 text-sm font-mono text-[#c9d1d9] min-h-[120px] focus:border-[var(--brand-success)] focus:ring-1 focus:ring-[var(--brand-success)]/50 outline-none transition-all resize-y cyber-scrollbar leading-relaxed"
+                />
+              </div>
 
-  body: {
-    padding: '32px',
-    maxWidth: '1400px',
-    margin: '0 auto',
-    width: '100%',
-    flex: 1
-  },
+              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--glass-border)]">
+                <NeonButton variant="ghost" onClick={() => setShowForm(false)}>
+                  CANCEL
+                </NeonButton>
+                <NeonButton 
+                  variant="success" 
+                  onClick={handleUpload}
+                  disabled={uploadMutation.isPending || !formData.versionNumber || !formData.file}
+                >
+                  {uploadMutation.isPending ? 'TRANSMITTING...' : 'EXECUTE_UPLOAD'}
+                </NeonButton>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-  topRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '24px',
-    flexWrap: 'wrap',
-    gap: '16px'
-  },
-  title: { margin: 0, fontSize: '32px', color: '#333', fontWeight: '700' },
-  addBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  },
+      <motion.div variants={listVariants} initial="hidden" animate="visible">
+        {(!versions || versions.length === 0) ? (
+          <GlassCard className="p-16 text-center flex flex-col items-center justify-center border-dashed">
+            <Package size={64} className="text-[var(--text-muted)] opacity-20 mb-6" />
+            <h3 className="text-2xl font-display font-bold mb-2">NO_BUILDS_FOUND</h3>
+            <p className="text-sm font-mono text-[var(--text-muted)] mb-8 max-w-md">
+              The version matrix is empty. Initialize an upload to deploy the first build for this project.
+            </p>
+            <NeonButton variant="primary" onClick={() => setShowForm(true)} className="flex items-center gap-2">
+              <Upload size={16} /> INITIALIZE_UPLOAD
+            </NeonButton>
+          </GlassCard>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {versions.map((version) => (
+              <motion.div key={version._id} variants={itemVariants}>
+                <GlassCard className="h-full flex flex-col p-0 overflow-hidden group hover:border-[var(--brand-primary)]/50 transition-colors">
+                  {/* Card Header */}
+                  <div className="p-5 border-b border-[var(--glass-border)] bg-black/40 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-[var(--brand-primary)]/5 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2" />
+                    
+                    <div className="flex justify-between items-start mb-2 relative z-10">
+                      <h3 className="font-display font-bold text-xl text-white flex items-center gap-2">
+                        <Package className="text-[var(--brand-primary)]" size={18} />
+                        {version.versionNumber}
+                      </h3>
+                      <CyberBadge variant="success" size="sm" className="font-mono">DEPLOYED</CyberBadge>
+                    </div>
+                    
+                    <div className="flex flex-col gap-1.5 mt-4 text-xs font-mono text-[var(--text-muted)] relative z-10">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={14} className="text-[var(--brand-purple)]" />
+                        {new Date(version.uploadedAt).toLocaleString()}
+                      </div>
+                      {version.uploadedBy && (
+                        <div className="flex items-center gap-2">
+                          <UserIcon size={14} className="text-[var(--brand-warning)]" />
+                          {version.uploadedBy.name}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-  form: {
-    backgroundColor: '#fff',
-    padding: '24px',
-    borderRadius: '12px',
-    marginBottom: '32px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    border: '2px solid #4f46e5'
-  },
-  formTitle: {
-    margin: '0 0 20px',
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  formGroup: {
-    marginBottom: '16px'
-  },
-  label: {
-    display: 'block',
-    marginBottom: '8px',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  input: {
-    width: '100%',
-    padding: '10px 14px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-    transition: 'border-color 0.2s'
-  },
-  textarea: {
-    width: '100%',
-    padding: '10px 14px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-    resize: 'vertical',
-    transition: 'border-color 0.2s'
-  },
-  fileInputWrapper: {
-    display: 'flex',
-    gap: '10px'
-  },
-  fileInput: {
-    display: 'none'
-  },
-  chooseFileBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#f97316',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  fileName: {
-    marginTop: '8px',
-    fontSize: '13px',
-    color: '#10b981',
-    fontWeight: '600'
-  },
-  formActions: {
-    display: 'flex',
-    gap: '12px',
-    marginTop: '20px'
-  },
-  submitBtn: {
-    padding: '10px 24px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  cancelBtn: {
-    padding: '10px 24px',
-    backgroundColor: '#e5e7eb',
-    color: '#666',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    transition: 'all 0.2s'
-  },
+                  {/* Card Body */}
+                  <div className="p-5 flex-1 flex flex-col gap-4">
+                    <div className="flex-1">
+                      <h4 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">Release Diagnostics</h4>
+                      <p className="text-sm text-[var(--text-main)] line-clamp-3 leading-relaxed">
+                        {version.releaseNotes || 'No diagnostics provided for this build.'}
+                      </p>
+                    </div>
 
-  section: { marginBottom: '32px' },
-  sectionTitle: { margin: '0 0 16px', fontSize: '20px', fontWeight: '600', color: '#333' },
+                    {version.file && (
+                      <div className="bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg p-3 flex items-center justify-between group-hover:border-[var(--brand-primary)]/30 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText size={16} className="text-[var(--brand-primary)] shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-mono font-bold text-[var(--text-main)] truncate">{version.file.fileName}</p>
+                            <p className="text-[10px] font-mono text-[var(--text-muted)]">{(version.file.fileSize / 1024).toFixed(2)} KB</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-  empty: {
-    backgroundColor: '#fff',
-    padding: '60px 20px',
-    borderRadius: '12px',
-    textAlign: 'center',
-    color: '#999',
-    fontSize: '16px'
-  },
-
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-    gap: '20px'
-  },
-
-  card: {
-    backgroundColor: '#fff',
-    padding: '20px',
-    borderRadius: '12px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    borderLeft: '4px solid #4f46e5',
-    transition: 'all 0.2s'
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px',
-    gap: '12px'
-  },
-  cardTitle: { margin: 0, color: '#333', fontSize: '16px', fontWeight: '600' },
-  badge: {
-    display: 'inline-block',
-    padding: '4px 10px',
-    backgroundColor: '#eef2ff',
-    color: '#4f46e5',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: '600',
-    whiteSpace: 'nowrap'
-  },
-  cardDesc: { color: '#666', fontSize: '13px', margin: '0 0 12px', lineHeight: '1.5' },
-
-  fileInfo: {
-    backgroundColor: '#f9fafb',
-    padding: '10px 12px',
-    borderRadius: '6px',
-    marginBottom: '12px'
-  },
-  fileSize: { color: '#999', fontSize: '12px', margin: '4px 0 0' },
-
-  cardDate: { color: '#999', fontSize: '12px', margin: '8px 0' },
-  uploadedBy: { color: '#666', fontSize: '12px', margin: '0' },
-
-  cardActions: { display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' },
-  downloadBtn: {
-    padding: '8px 12px',
-    backgroundColor: '#10b981',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    flex: 1,
-    minWidth: '80px',
-    transition: 'all 0.2s'
-  },
-  deleteBtn: {
-    padding: '8px 12px',
-    backgroundColor: '#ef4444',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    flex: 1,
-    minWidth: '80px',
-    transition: 'all 0.2s'
-  },
-  feedbackBtn: {
-    padding: '8px 12px',
-    backgroundColor: '#f97316',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    flex: 1,
-    minWidth: '80px',
-    transition: 'all 0.2s'
+                  {/* Card Actions */}
+                  <div className="p-4 border-t border-[var(--glass-border)] flex items-center gap-2 bg-black/20">
+                    <NeonButton 
+                      variant="primary" 
+                      className="flex-1 py-1.5 text-xs flex justify-center items-center gap-1.5"
+                      onClick={() => handleDownload(version._id, version.file?.fileName)}
+                      disabled={!version.file}
+                    >
+                      <Download size={14} /> GET
+                    </NeonButton>
+                    <NeonButton 
+                      variant="purple" 
+                      className="flex-1 py-1.5 text-xs flex justify-center items-center gap-1.5"
+                      onClick={() => navigate(`/feedback/${version._id}`)}
+                    >
   },
 
   errorBox: {

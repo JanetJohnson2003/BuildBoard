@@ -7,12 +7,14 @@ const RepoLayout = () => {
 
   const tabs = [
     { name: 'Code', path: `/${owner}/${repo}`, icon: 'code' },
-    { name: 'Issues', path: `/${owner}/${repo}/issues`, icon: 'issue' },
-    { name: 'Pull Requests', path: `/${owner}/${repo}/pulls`, icon: 'pr' },
-    { name: 'Actions', path: `/${owner}/${repo}/actions`, icon: 'play' },
-    { name: 'Projects', path: `/${owner}/${repo}/projects`, icon: 'project' },
-    { name: 'Security', path: `/${owner}/${repo}/security`, icon: 'shield' },
-    { name: 'Settings', path: `/${owner}/${repo}/settings`, icon: 'gear' },
+    { name: 'Issues', path: `/${owner}/${repo}?tab=issues`, icon: 'issue' },
+    { name: 'Pull Requests', path: `/${owner}/${repo}?tab=pull-requests`, icon: 'pr' },
+    { name: 'Actions', path: `/${owner}/${repo}?tab=actions`, icon: 'play' },
+    { name: 'Projects', path: `/${owner}/${repo}?tab=projects`, icon: 'project' },
+    { name: 'Security', path: `/${owner}/${repo}?tab=security`, icon: 'shield' },
+    { name: 'Insights', path: `/${owner}/${repo}/analytics`, icon: 'graph' },
+    { name: 'Comm-Link', path: `/${owner}/${repo}/chat`, icon: 'message' },
+    { name: 'Settings', path: `/${owner}/${repo}?tab=settings`, icon: 'gear' },
   ];
 
   return (
@@ -28,7 +30,19 @@ const RepoLayout = () => {
 
         <nav className="flex gap-2 -mb-px overflow-x-auto">
           {tabs.map((tab) => {
-            const isActive = location.pathname === tab.path || (tab.name === 'Code' && location.pathname === `/${owner}/${repo}`);
+            const isTabCode = tab.name === 'Code';
+            const tabUrl = new URL(tab.path, window.location.origin);
+            const expectedPath = tabUrl.pathname;
+            const expectedSearch = tabUrl.search;
+            
+            let isActive = false;
+            if (expectedSearch) {
+              isActive = location.pathname === expectedPath && location.search.includes(expectedSearch);
+            } else {
+              isActive = location.pathname === expectedPath && (!location.search || isTabCode);
+            }
+            if (isTabCode && location.pathname === `/${owner}/${repo}` && !location.search) isActive = true;
+
             return (
               <Link
                 key={tab.name}

@@ -28,6 +28,7 @@ router.put('/:owner/:repo/file', auth, featureController.upsertFile);
 router.post('/:owner/:repo/upload', auth, featureController.uploadFiles);
 router.delete('/:owner/:repo/file', auth, featureController.deleteFile);
 router.post('/:owner/:repo/file/move', auth, featureController.moveFile);
+router.post('/:owner/:repo/run', auth, featureController.runCode);
 
 // Branches and commits
 router.get('/:owner/:repo/branches', auth, featureController.getBranches);
@@ -73,5 +74,9 @@ router.post('/:owner/:repo/workflows/:workflowId/runs', auth, featureController.
 // Security and insights
 router.get('/:owner/:repo/security', auth, featureController.getSecurityDashboard);
 router.get('/:owner/:repo/insights', auth, featureController.getInsights);
+
+// Chat
+router.get('/:owner/:repo/chat', auth, featureController.getChatMessages);
+router.post('/:owner/:repo/chat', auth, featureController.postChatMessage);
 
 module.exports = router;

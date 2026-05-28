@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
-
-const Icon = ({ children, size = 16 }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
-);
-const BellIcon = () => <Icon size={20}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></Icon>;
-const CheckIcon = () => <Icon size={14}><path d="m5 12 5 5L20 7" /></Icon>;
-const IssueIcon = () => <Icon size={14}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="2" /></Icon>;
-const PRIcon = () => <Icon size={14}><circle cx="6" cy="6" r="2" /><circle cx="18" cy="18" r="2" /><path d="M6 8v8a2 2 0 0 0 2 2h6" /></Icon>;
-
-const typeIcon = { issue: <IssueIcon />, pull_request: <PRIcon />, mention: <BellIcon /> };
+import { GlassCard, NeonButton, CyberSkeleton } from '../components/ui';
+import { pageVariants, listVariants, itemVariants } from '../utils/animations';
+import { Bell, Check, CircleDot, GitPullRequest, AtSign, CheckCircle2 } from 'lucide-react';
 
 const UserNotifications = () => {
   const queryClient = useQueryClient();
@@ -36,70 +30,140 @@ const UserNotifications = () => {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const getTypeConfig = (type) => {
+    switch (type) {
+      case 'issue':
+        return { icon: CircleDot, color: 'text-[var(--brand-success)]' };
+      case 'pull_request':
+        return { icon: GitPullRequest, color: 'text-[var(--brand-purple)]' };
+      case 'mention':
+        return { icon: AtSign, color: 'text-[var(--brand-warning)]' };
+      default:
+        return { icon: Bell, color: 'text-[var(--brand-primary)]' };
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-3 border-b border-[var(--border-main)] pb-4 md:flex-row md:items-end">
+    <motion.div 
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="max-w-7xl mx-auto py-8 px-4 space-y-8"
+    >
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[var(--glass-border)] pb-6">
         <div>
-          <h1 className="text-2xl font-semibold">Notifications</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'You\'re all caught up'}
+          <h1 className="text-3xl font-display font-bold flex items-center gap-3 text-white">
+            <Bell className="text-[var(--brand-primary)]" size={32} />
+            COMMUNICATIONS
+          </h1>
+          <p className="text-sm font-mono text-[var(--text-muted)] mt-2">
+            {unreadCount > 0 
+              ? `YOU HAVE ${unreadCount} UNREAD ${unreadCount !== 1 ? 'MESSAGES' : 'MESSAGE'}` 
+              : 'ALL COMMUNICATIONS PROCESSED'}
           </p>
         </div>
         {unreadCount > 0 && (
-          <button className="btn-secondary self-start gap-1.5 text-sm md:self-auto" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
-            <CheckIcon /> Mark all as read
-          </button>
+          <NeonButton 
+            variant="ghost" 
+            onClick={() => markAllRead.mutate()} 
+            disabled={markAllRead.isPending}
+            className="flex items-center gap-2 self-start md:self-auto border-[var(--brand-success)]/50 text-[var(--brand-success)] hover:bg-[var(--brand-success)]/10"
+          >
+            <CheckCircle2 size={16} /> 
+            ACKNOWLEDGE_ALL
+          </NeonButton>
         )}
       </div>
 
-      <div className="flex gap-1 rounded-md border border-[var(--border-main)] p-1 w-fit">
+      <div className="flex gap-2 p-1 rounded-lg border border-[var(--glass-border)] bg-black/40 w-fit">
         {['unread', 'all'].map((s) => (
           <button
             key={s}
             type="button"
-            className={`rounded px-3 py-1 text-sm capitalize ${filter === s ? 'bg-[var(--bg-main)] font-semibold shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
+            className={`rounded-md px-4 py-1.5 text-xs font-mono uppercase transition-all duration-300 ${
+              filter === s 
+                ? 'bg-[var(--brand-primary)]/20 text-[var(--brand-primary)] border border-[var(--brand-primary)]/50 shadow-[0_0_10px_rgba(56,189,248,0.2)]' 
+                : 'text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent'
+            }`}
             onClick={() => setFilter(s)}
-          >{s}</button>
+          >
+            {s}
+          </button>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[1,2,3,4].map((i) => <div key={i} className="h-14 animate-pulse rounded-md bg-[var(--bg-subtle)]" />)}
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map((i) => <CyberSkeleton key={i} className="h-20 rounded-lg" />)}
         </div>
       ) : notifications.length === 0 ? (
-        <div className="rounded-md border border-dashed border-[var(--border-main)] px-4 py-12 text-center">
-          <div className="mb-3 flex justify-center text-[var(--text-muted)]"><BellIcon /></div>
-          <div className="text-sm font-medium">No notifications</div>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            {filter === 'unread' ? 'You\'re all caught up! Switch to All to see history.' : 'Nothing yet — activity will show up here.'}
+        <GlassCard className="p-16 text-center flex flex-col items-center justify-center border-dashed">
+          <Bell size={48} className="text-[var(--text-muted)] opacity-20 mb-4" />
+          <h3 className="text-xl font-display font-bold mb-2">NO_NEW_DATA</h3>
+          <p className="text-sm font-mono text-[var(--text-muted)]">
+            {filter === 'unread' ? 'System indicates no unread communications. Switch to ALL to view history.' : 'No communication history found.'}
           </p>
-        </div>
+        </GlassCard>
       ) : (
-        <div className="panel divide-y divide-[var(--border-main)]">
-          {notifications.map((n) => (
-            <div key={n._id} className={`flex items-start gap-3 p-4 ${!n.read ? 'bg-[var(--bg-subtle)]' : ''} hover:bg-[var(--bg-subtle)] transition-colors`}>
-              {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--brand-primary)]" />}
-              <span className="mt-0.5 shrink-0 text-[var(--text-muted)]">{typeIcon[n.type] || <BellIcon />}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm">{n.message || n.title || 'New notification'}</div>
-                {n.createdAt && (
-                  <div className="mt-0.5 text-xs text-[var(--text-muted)]">{new Date(n.createdAt).toLocaleString()}</div>
-                )}
-              </div>
-              {!n.read && (
-                <button
-                  type="button"
-                  className="btn-secondary shrink-0 gap-1 px-2 py-1 text-xs"
-                  onClick={() => markRead.mutate(n._id)}
-                  title="Mark as read"
-                ><CheckIcon /></button>
-              )}
-            </div>
-          ))}
-        </div>
+        <motion.div variants={listVariants} initial="hidden" animate="visible" className="space-y-3">
+          <AnimatePresence>
+            {notifications.map((n) => {
+              const { icon: TypeIcon, color } = getTypeConfig(n.type);
+              return (
+                <motion.div 
+                  key={n._id} 
+                  variants={itemVariants}
+                  layout
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="group"
+                >
+                  <GlassCard className={`p-0 overflow-hidden border-l-4 transition-all duration-300 ${
+                    !n.read 
+                      ? 'border-l-[var(--brand-primary)] bg-[var(--brand-primary)]/5' 
+                      : 'border-l-[var(--glass-border)] opacity-70 hover:opacity-100'
+                  } hover:border-[var(--brand-primary)]/50`}>
+                    <div className="p-4 flex items-start gap-4">
+                      
+                      <div className="relative shrink-0 mt-1">
+                        <TypeIcon size={18} className={color} />
+                        {!n.read && (
+                          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[var(--brand-primary)] shadow-[0_0_8px_var(--brand-primary)] animate-pulse" />
+                        )}
+                      </div>
+                      
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-sm ${!n.read ? 'text-white font-medium' : 'text-[var(--text-main)]'} mb-1`}>
+                          {n.message || n.title || 'New system notification'}
+                        </div>
+                        {n.createdAt && (
+                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {!n.read && (
+                        <button
+                          type="button"
+                          className="shrink-0 p-2 rounded-lg border border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--brand-success)] hover:border-[var(--brand-success)]/50 hover:bg-[var(--brand-success)]/10 transition-all"
+                          onClick={() => markRead.mutate(n._id)}
+                          title="Acknowledge Message"
+                        >
+                          <Check size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </GlassCard>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 };
 

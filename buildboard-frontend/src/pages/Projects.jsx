@@ -1,679 +1,377 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import axios from 'axios'
-import { useNavigate } from 'react-router-dom'
-import Toast from '../components/Toast'
-import Notifications from '../components/Notifications'
-import ShareModal from '../components/ShareModal'
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import { GlassCard, NeonButton, CyberInput, CyberBadge, CyberSkeleton, CyberModal } from '../components/ui';
+import { 
+  FolderGit2, Search, Filter, Plus, Calendar, Clock, Share2, 
+  Settings, ChevronRight, AlertCircle, FileText, X, Rocket
+} from 'lucide-react';
+import { pageVariants, listVariants, itemVariants } from '../utils/animations';
+import ShareModal from '../components/ShareModal';
 
 function Projects() {
-  const [projects, setProjects] = useState([])
-  const [filteredProjects, setFilteredProjects] = useState([])
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [toast, setToast] = useState(null)
-  const [showShareModal, setShowShareModal] = useState(false)
-  const [selectedProjectId, setSelectedProjectId] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  // Search & Filter states
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterUser, setFilterUser] = useState('all')
-  const [filterDate, setFilterDate] = useState('all')
-  const [showFilters, setShowFilters] = useState(false)
-
-  const navigate = useNavigate()
-  const token = localStorage.getItem('token')
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
-  // ✅ Use ref to track if already fetched
-  const hasFetchedRef = useRef(false)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
   
-  const getUserData = () => {
-    try {
-      const userData = localStorage.getItem('user')
-      return userData ? JSON.parse(userData) : null
-    } catch (err) {
-      console.error('Error parsing user data:', err)
-      return null
-    }
-  }
-  
-  const user = getUserData()
+  // Create Project State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newProject, setNewProject] = useState({ title: '', description: '' });
+  const [createError, setCreateError] = useState('');
 
-  const showToast = (message, type = 'info') => {
-    setToast({ message, type })
-  }
+  // Share Modal State
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
 
-  // ✅ INCREASED TIMEOUT to 15000
-  const fetchProjects = useCallback(async () => {
-    try {
-      console.log('📥 Fetching projects...')
-      setLoading(true)
-      setError(null)
-      
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  const { data: projects = [], isLoading, error } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
       const res = await axios.get('http://localhost:5000/api/projects', {
-        headers: { 
-          Authorization: token,
-          'Content-Type': 'application/json'
-        },
-        timeout: 15000  // ✅ INCREASED FROM 8000 to 15000
-      })
-      
-      console.log('✅ Projects fetched:', res.data.length)
-      setProjects(res.data)
-      setLoading(false)
-    } catch (err) {
-      console.error('❌ Error fetching projects:', err.message)
-      setError(err.message)
-      setLoading(false)
-      // Don't retry automatically - let user click retry
-    }
-  }, [token])
+        headers: { Authorization: token }
+      });
+      return res.data;
+    },
+    enabled: !!token
+  });
 
-  const applyFilters = useCallback(() => {
-    let filtered = [...projects]
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
+      const res = await axios.post('http://localhost:5000/api/projects', data, {
+        headers: { Authorization: token }
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['projects']);
+      setShowCreateModal(false);
+      setNewProject({ title: '', description: '' });
+      setCreateError('');
+    },
+    onError: (err) => {
+      setCreateError(err.response?.data?.message || 'Failed to create project');
+    }
+  });
+
+  const filteredProjects = useMemo(() => {
+    let filtered = projects;
 
     if (searchQuery.trim()) {
       filtered = filtered.filter(p =>
-        p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    }
-
-    if (filterUser === 'owned' && user) {
-      filtered = filtered.filter(p => p.createdBy._id === user._id)
+        p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     }
 
     if (filterDate !== 'all') {
-      const now = new Date()
+      const now = new Date();
       filtered = filtered.filter(p => {
-        const createdDate = new Date(p.createdAt)
-        let daysAgo = 0
-        if (filterDate === 'week') daysAgo = 7
-        else if (filterDate === 'month') daysAgo = 30
-        else if (filterDate === 'year') daysAgo = 365
-        const cutoffDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
-        return createdDate >= cutoffDate
-      })
+        const createdDate = new Date(p.createdAt);
+        let daysAgo = 0;
+        if (filterDate === 'week') daysAgo = 7;
+        else if (filterDate === 'month') daysAgo = 30;
+        else if (filterDate === 'year') daysAgo = 365;
+        const cutoffDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+        return createdDate >= cutoffDate;
+      });
     }
 
-    setFilteredProjects(filtered)
-  }, [projects, searchQuery, filterUser, filterDate, user])
+    return filtered;
+  }, [projects, searchQuery, filterDate]);
 
-  // ✅ FETCH ONLY ONCE on mount
-  useEffect(() => {
-    console.log('📍 Projects component mounted')
-    
-    if (!token || !user) {
-      console.log('❌ No token or user, redirecting to login')
-      navigate('/')
-      return
-    }
-
-    // ✅ Only fetch if not already fetched
-    if (!hasFetchedRef.current) {
-      console.log('🔍 First time mounting - fetching projects')
-      hasFetchedRef.current = true
-      fetchProjects()
-    } else {
-      console.log('⏭️ Already fetched - skipping')
-      setLoading(false)
-    }
-
-    return () => {
-      console.log('🧹 Projects component unmounting')
-    }
-  }, [])  // ✅ EMPTY dependencies - mount only!
-
-  // ✅ Apply filters when projects change
-  useEffect(() => {
-    console.log('🔍 Applying filters')
-    applyFilters()
-  }, [projects, searchQuery, filterUser, filterDate])
-
-  const handleCreate = async () => {
-    if (!title) return showToast('Please enter project title', 'error')
-    try {
-      await axios.post(
-        'http://localhost:5000/api/projects',
-        { title, description },
-        { headers: { Authorization: token } }
-      )
-      setTitle('')
-      setDescription('')
-      setShowForm(false)
-      fetchProjects()
-      showToast('Project created successfully!', 'success')
-    } catch (err) {
-      showToast('Failed to create project', 'error')
-      console.log(err)
-    }
-  }
-
-  const handleShare = (projectId) => {
-    setSelectedProjectId(projectId)
-    setShowShareModal(true)
-  }
-
-  const handleLogout = () => {
-    localStorage.clear()
-    navigate('/')
-  }
-
-  const resetFilters = () => {
-    setSearchQuery('')
-    setFilterUser('all')
-    setFilterDate('all')
-    setShowFilters(false)
-  }
-
-  const hasActiveFilters = searchQuery || filterUser !== 'all' || filterDate !== 'all'
-
-  if (!user) {
-    return null
-  }
-
-  // ✅ Show loading state
-  if (loading) {
+  if (!token || !user?.id) {
     return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
-        </div>
-        <div style={styles.body}>
-          <div style={styles.loadingBox}>
-            <p>⏳ Loading projects...</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[60vh] p-8">
+        <GlassCard glowColor="var(--brand-danger)" className="p-12 text-center max-w-md border-[var(--brand-danger)]/50 bg-[var(--brand-danger)]/5">
+          <AlertCircle size={48} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <h2 className="text-xl font-display font-bold text-white mb-2">ACCESS_DENIED</h2>
+          <p className="text-sm font-mono text-[var(--text-muted)] mb-6">Authentication required to view this sector.</p>
+          <NeonButton variant="ghost" onClick={() => navigate('/login')}>AUTHENTICATE</NeonButton>
+        </GlassCard>
       </div>
-    )
+    );
   }
 
-  // ✅ Show error state
-  if (error) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
-        </div>
-        <div style={styles.body}>
-          <div style={styles.errorBox}>
-            <p>❌ {error}</p>
-            <button 
-              style={styles.retryBtn}
-              onClick={() => {
-                hasFetchedRef.current = false
-                window.location.reload()
-              }}
-            >
-              🔄 Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const hasActiveFilters = searchQuery || filterDate !== 'all';
 
   return (
-    <div style={styles.container}>
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-
-      {/* ✅ NAVBAR */}
-      <div style={styles.navbar}>
-        <h2 style={styles.logo}>BuildBoard+</h2>
-        <div style={styles.navRight}>
-          <button 
-            style={styles.analyticsBtn} 
-            onClick={() => {
-              console.log('📊 Navigating to analytics...')
-              setShowForm(false)
-              setShowFilters(false)
-              navigate('/analytics')
-            }}
-            title="View Analytics"
+    <motion.div 
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="max-w-7xl mx-auto p-4 md:p-8 space-y-8"
+    >
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[var(--glass-border)] pb-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-display font-bold flex items-center gap-3 text-white">
+            <FolderGit2 className="text-[var(--brand-primary)]" />
+            MY_PROJECTS
+          </h1>
+          <p className="text-sm font-mono text-[var(--text-muted)] mt-1">
+            Manage your deployed sectors and version history.
+          </p>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-3">
+          <NeonButton 
+            variant="ghost" 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 ${hasActiveFilters ? 'text-[var(--brand-warning)] border-[var(--brand-warning)]/50' : ''}`}
           >
-            📊 Analytics
-          </button>
-          <Notifications />
-          <span style={styles.username}>👋 {user?.name}</span>
-          <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+            <Filter size={16} /> 
+            {showFilters ? 'HIDE_FILTERS' : 'SHOW_FILTERS'}
+            {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-[var(--brand-warning)] ml-1 shadow-[0_0_8px_var(--brand-warning)] animate-pulse" />}
+          </NeonButton>
+          
+          <NeonButton 
+            variant="primary" 
+            className="flex items-center gap-2"
+            onClick={() => setShowCreateModal(true)}
+          >
+            <Plus size={16} /> INITIALIZE_PROJECT
+          </NeonButton>
         </div>
       </div>
 
-      <div style={styles.body}>
-        <div style={styles.topRow}>
-          <h3 style={styles.heading}>My Projects</h3>
-          <div style={styles.topActions}>
-            <button 
-              style={{
-                ...styles.filterToggleBtn,
-                ...(hasActiveFilters ? styles.filterToggleBtnActive : {})
-              }} 
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              🔍 {showFilters ? 'Hide Filters' : 'Show Filters'}
-              {hasActiveFilters && <span style={styles.filterBadge}>●</span>}
-            </button>
-            <button style={styles.addBtn} onClick={() => setShowForm(!showForm)}>
-              {showForm ? '✕ Cancel' : '+ New Project'}
-            </button>
-            
-            <button 
-              style={{...styles.addBtn, backgroundColor: '#10b981'}}
-              onClick={() => {
-                console.log('🔗 Navigating to shared projects...')
-                setShowForm(false)
-                setShowFilters(false)
-                navigate('/shared-projects')
-              }}
-              title="View projects shared with you"
-            >
-              📤 Shared Projects
-            </button>
-          </div>
-        </div>
-
+      <AnimatePresence>
         {showFilters && (
-          <div style={styles.filterPanel}>
-            <div style={styles.filterRow}>
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>🔍 Search Projects</label>
-                <input
-                  style={styles.searchInput}
-                  type="text"
-                  placeholder="Search by name or description..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <GlassCard className="p-4 md:p-6 bg-[var(--bg-tertiary)]/50 border-dashed border-[var(--glass-border)]">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                <div className="md:col-span-6 lg:col-span-8">
+                  <label className="block text-[10px] font-mono text-[var(--text-muted)] mb-1.5 uppercase">Search Database</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--brand-primary)]" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Enter sector ID or designation..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-black/40 border border-[var(--glass-border)] rounded-lg py-2.5 pl-9 pr-4 text-sm font-mono text-white focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]/50 outline-none transition-all placeholder-[var(--text-muted)]"
+                    />
+                  </div>
+                </div>
+                
+                <div className="md:col-span-4 lg:col-span-3">
+                  <label className="block text-[10px] font-mono text-[var(--text-muted)] mb-1.5 uppercase">Timeframe</label>
+                  <select
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="w-full bg-black/40 border border-[var(--glass-border)] rounded-lg py-2.5 px-3 text-sm font-mono text-white focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]/50 outline-none transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="all">ALL_TIME</option>
+                    <option value="week">PAST_7_DAYS</option>
+                    <option value="month">PAST_30_DAYS</option>
+                    <option value="year">PAST_YEAR</option>
+                  </select>
+                </div>
+                
+                <div className="md:col-span-2 lg:col-span-1 flex justify-end">
+                  <button 
+                    onClick={() => { setSearchQuery(''); setFilterDate('all'); }}
+                    className="h-10 px-3 w-full md:w-auto rounded-lg border border-[var(--brand-danger)]/50 text-[var(--brand-danger)] hover:bg-[var(--brand-danger)]/10 text-xs font-mono transition-colors"
+                  >
+                    RESET
+                  </button>
+                </div>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {isLoading ? (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map(i => <CyberSkeleton key={i} className="h-[280px] rounded-xl" />)}
+        </div>
+      ) : error ? (
+        <GlassCard glowColor="var(--brand-danger)" className="p-8 text-center border-[var(--brand-danger)]/30">
+          <AlertCircle size={32} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <p className="text-[var(--text-main)] font-mono text-sm mb-4">Error accessing project database: {error.message}</p>
+          <NeonButton onClick={() => queryClient.invalidateQueries(['projects'])}>RETRY_CONNECTION</NeonButton>
+        </GlassCard>
+      ) : (
+        <motion.div variants={listVariants} initial="hidden" animate="visible">
+          {filteredProjects.length === 0 ? (
+            <GlassCard className="p-16 text-center flex flex-col items-center justify-center border-dashed">
+              <FolderGit2 size={64} className="text-[var(--text-muted)] opacity-20 mb-6" />
+              <h3 className="text-2xl font-display font-bold mb-2">NO_SECTORS_FOUND</h3>
+              <p className="text-sm font-mono text-[var(--text-muted)] mb-8 max-w-md">
+                {projects.length === 0 
+                  ? "Your sector registry is currently empty. Initialize a new project to begin operations." 
+                  : "No projects match your current filter parameters."}
+              </p>
+              {projects.length === 0 && (
+                <NeonButton variant="primary" onClick={() => setShowCreateModal(true)}>
+                  INITIALIZE_PROJECT
+                </NeonButton>
+              )}
+            </GlassCard>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <AnimatePresence>
+                {filteredProjects.map((project) => (
+                  <motion.div 
+                    key={project._id} 
+                    variants={itemVariants}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <GlassCard className="h-full flex flex-col p-0 overflow-hidden group hover:border-[var(--brand-primary)]/40 transition-colors">
+                      <div className="p-5 border-b border-[var(--glass-border)] bg-black/30 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--brand-primary)]/10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2 group-hover:bg-[var(--brand-primary)]/20 transition-colors" />
+                        
+                        <div className="flex justify-between items-start mb-3 relative z-10">
+                          <h3 className="font-display font-bold text-lg text-white group-hover:text-[var(--brand-primary)] transition-colors truncate">
+                            {project.title}
+                          </h3>
+                          <CyberBadge variant="primary" size="sm" className="font-mono ml-2 shrink-0">OWNER</CyberBadge>
+                        </div>
+                        
+                        <div className="flex flex-col gap-1.5 text-xs font-mono text-[var(--text-muted)] relative z-10">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                              <Calendar size={12} className="text-[var(--brand-purple)]" />
+                              {new Date(project.createdAt).toLocaleDateString()}
+                            </span>
+                            {project.sharedWith?.length > 0 && (
+                              <span className="flex items-center gap-1.5 text-[var(--brand-warning)]" title={`Shared with ${project.sharedWith.length} operatives`}>
+                                <Share2 size={12} />
+                                {project.sharedWith.length}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-5 flex-1">
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">Sector Brief</h4>
+                        <p className="text-sm text-[var(--text-main)] line-clamp-3 leading-relaxed">
+                          {project.description || 'No operational description provided.'}
+                        </p>
+                      </div>
+
+                      <div className="p-4 border-t border-[var(--glass-border)] bg-[var(--bg-tertiary)] flex gap-3 mt-auto">
+                        <button
+                          className="flex-1 bg-black/40 hover:bg-[var(--brand-primary)]/10 border border-[var(--glass-border)] hover:border-[var(--brand-primary)]/50 text-white rounded-lg py-2 px-3 text-xs font-mono flex items-center justify-center gap-2 transition-all"
+                          onClick={() => navigate(`/versions/${project._id}`)}
+                        >
+                          <Settings size={14} className="text-[var(--brand-primary)]" /> MANAGE
+                        </button>
+                        <button
+                          className="bg-black/40 hover:bg-[var(--brand-warning)]/10 border border-[var(--glass-border)] hover:border-[var(--brand-warning)]/50 text-white rounded-lg py-2 px-3 text-xs font-mono flex items-center justify-center transition-all"
+                          onClick={() => {
+                            setSelectedProjectId(project._id);
+                            setShowShareModal(true);
+                          }}
+                          title="Share Project"
+                        >
+                          <Share2 size={16} className="text-[var(--brand-warning)]" />
+                        </button>
+                      </div>
+                    </GlassCard>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* CREATE PROJECT MODAL */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <CyberModal 
+            title="INITIALIZE_NEW_SECTOR" 
+            onClose={() => setShowCreateModal(false)}
+            icon={<Rocket className="text-[var(--brand-success)]" />}
+          >
+            <div className="space-y-4 font-mono">
+              {createError && (
+                <div className="p-3 bg-[var(--brand-danger)]/10 border border-[var(--brand-danger)]/50 rounded-lg text-xs text-[var(--brand-danger)]">
+                  {createError}
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-[10px] text-[var(--text-muted)] uppercase mb-2">Sector Designation (Title) *</label>
+                <CyberInput 
+                  placeholder="e.g. Project Apollo" 
+                  value={newProject.title}
+                  onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
                   autoFocus
                 />
               </div>
-
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>👤 Project Type</label>
-                <select
-                  style={styles.filterSelect}
-                  value={filterUser}
-                  onChange={(e) => setFilterUser(e.target.value)}
-                >
-                  <option value="all">All Projects</option>
-                  <option value="owned">📋 My Projects</option>
-                </select>
+              
+              <div>
+                <label className="block text-[10px] text-[var(--text-muted)] uppercase mb-2">Operational Brief (Description)</label>
+                <textarea
+                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg p-3 text-sm text-white focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]/50 outline-none transition-all placeholder-[var(--text-muted)] resize-none"
+                  rows={4}
+                  placeholder="Enter project specifications..."
+                  value={newProject.description}
+                  onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                />
               </div>
 
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>📅 Date Range</label>
-                <select
-                  style={styles.filterSelect}
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
+              <div className="pt-4 flex gap-3">
+                <button 
+                  className="flex-1 py-2.5 rounded-lg border border-[var(--glass-border)] hover:bg-white/5 text-[var(--text-muted)] hover:text-white transition-colors text-sm uppercase tracking-wider"
+                  onClick={() => setShowCreateModal(false)}
                 >
-                  <option value="all">All Time</option>
-                  <option value="week">Last 7 Days</option>
-                  <option value="month">Last 30 Days</option>
-                  <option value="year">Last Year</option>
-                </select>
-              </div>
-
-              <div style={styles.filterGroup}>
-                <button style={styles.resetBtn} onClick={resetFilters}>
-                  ✕ Clear All
+                  ABORT
                 </button>
+                <NeonButton 
+                  variant="primary" 
+                  className="flex-1"
+                  onClick={() => {
+                    if (!newProject.title.trim()) {
+                      setCreateError('Sector Designation is required.');
+                      return;
+                    }
+                    createMutation.mutate(newProject);
+                  }}
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? 'INITIALIZING...' : 'INITIALIZE'}
+                </NeonButton>
               </div>
             </div>
-
-            <div style={styles.resultsInfo}>
-              📊 Showing <strong>{filteredProjects.length}</strong> of <strong>{projects.length}</strong> projects
-              {hasActiveFilters && ' (filtered)'}
-            </div>
-          </div>
+          </CyberModal>
         )}
+      </AnimatePresence>
 
-        {showForm && (
-          <div style={styles.form}>
-            <h4 style={styles.formTitle}>✏️ Create New Project</h4>
-            <input
-              style={styles.input}
-              placeholder="Project Title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              autoFocus
-            />
-            <textarea
-              style={styles.textarea}
-              placeholder="Project Description (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <div style={styles.formActions}>
-              <button style={styles.submitBtn} onClick={handleCreate}>
-                ✓ Create Project
-              </button>
-              <button 
-                style={styles.cancelBtn} 
-                onClick={() => {
-                  setShowForm(false)
-                  setTitle('')
-                  setDescription('')
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {filteredProjects.length === 0 ? (
-          <div style={styles.empty}>
-            <p>
-              {projects.length === 0
-                ? '📭 No projects yet. Click "+ New Project" to start! 🚀'
-                : '🔍 No projects match your filters. Try adjusting your search!'}
-            </p>
-          </div>
-        ) : (
-          <div style={styles.grid}>
-            {filteredProjects.map((project) => (
-              <div key={project._id} style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <h4 style={styles.cardTitle}>{project.title}</h4>
-                  <span style={styles.badge}>👤 Owned</span>
-                </div>
-                <p style={styles.cardDesc}>
-                  {project.description || '📝 No description'}
-                </p>
-                <p style={styles.cardDate}>
-                  📅 {new Date(project.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </p>
-                {project.sharedWith && project.sharedWith.length > 0 && (
-                  <p style={styles.sharedInfo}>
-                    🔗 Shared with {project.sharedWith.length} user{project.sharedWith.length !== 1 ? 's' : ''}
-                  </p>
-                )}
-                <div style={styles.btnRow}>
-                  <button
-                    style={styles.viewBtn}
-                    onClick={() => navigate(`/versions/${project._id}`)}
-                  >
-                    View Versions →
-                  </button>
-                  <button
-                    style={styles.shareBtn}
-                    onClick={() => handleShare(project._id)}
-                    title="Share project"
-                  >
-                    🔗 Share
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {showShareModal && (
-          <ShareModal
-            projectId={selectedProjectId}
-            onClose={() => {
-              setShowShareModal(false)
-              setSelectedProjectId(null)
-            }}
-            onShare={() => {
-              fetchProjects()
-              showToast('✅ Project shared successfully!', 'success')
-            }}
-          />
-        )}
-      </div>
-    </div>
-  )
+      {/* SHARE MODAL - Assuming ShareModal still works or handles its own UI */}
+      {showShareModal && (
+        <ShareModal
+          projectId={selectedProjectId}
+          onClose={() => {
+            setShowShareModal(false);
+            setSelectedProjectId(null);
+          }}
+          onShare={() => {
+            queryClient.invalidateQueries(['projects']);
+          }}
+        />
+      )}
+    </motion.div>
+  );
 }
 
-const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#f0f2f5' },
-  navbar: {
-    display: 'flex', justifyContent: 'space-between',
-    alignItems: 'center', padding: '16px 32px',
-    backgroundColor: '#4f46e5', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-  },
-  logo: { margin: 0, color: '#fff', fontSize: '24px', fontWeight: '700' },
-  navRight: { display: 'flex', alignItems: 'center', gap: '16px' },
-  username: { color: '#fff', fontSize: '14px', fontWeight: '500' },
-  analyticsBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#10b981',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  logoutBtn: {
-    padding: '8px 16px', backgroundColor: '#fff',
-    color: '#4f46e5', border: 'none',
-    borderRadius: '6px', cursor: 'pointer', fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  body: { padding: '32px', maxWidth: '1400px', margin: '0 auto' },
-  loadingBox: {
-    textAlign: 'center',
-    padding: '60px 20px',
-    color: '#666',
-    fontSize: '18px'
-  },
-  errorBox: {
-    backgroundColor: '#fee',
-    border: '2px solid #ef4444',
-    borderRadius: '12px',
-    padding: '20px',
-    textAlign: 'center',
-    color: '#dc2626'
-  },
-  retryBtn: {
-    marginTop: '16px',
-    padding: '10px 20px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600'
-  },
-  topRow: {
-    display: 'flex', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: '24px',
-    flexWrap: 'wrap', gap: '16px'
-  },
-  topActions: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
-  heading: { margin: 0, fontSize: '28px', color: '#333', fontWeight: '700' },
-  filterToggleBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#f97316',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
-    position: 'relative'
-  },
-  filterToggleBtnActive: {
-    backgroundColor: '#ea580c',
-    boxShadow: '0 0 0 3px rgba(249, 115, 22, 0.2)'
-  },
-  filterBadge: { display: 'inline-block', marginLeft: '6px', color: '#fef3c7' },
-  addBtn: {
-    padding: '10px 20px', backgroundColor: '#4f46e5',
-    color: '#fff', border: 'none', borderRadius: '8px',
-    cursor: 'pointer', fontSize: '14px', fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  filterPanel: {
-    backgroundColor: '#fff',
-    padding: '24px',
-    borderRadius: '12px',
-    marginBottom: '24px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    border: '2px solid #f97316'
-  },
-  filterRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: '16px',
-    marginBottom: '16px'
-  },
-  filterGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  filterLabel: { fontSize: '13px', fontWeight: '600', color: '#333' },
-  searchInput: {
-    padding: '10px 12px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-    transition: 'border-color 0.2s'
-  },
-  filterSelect: {
-    padding: '10px 12px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontFamily: 'inherit',
-    cursor: 'pointer',
-    boxSizing: 'border-box'
-  },
-  resetBtn: {
-    padding: '10px 12px',
-    backgroundColor: '#ef4444',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600',
-    alignSelf: 'flex-end',
-    transition: 'all 0.2s'
-  },
-  resultsInfo: {
-    fontSize: '13px',
-    color: '#666',
-    fontWeight: '600',
-    padding: '8px 0',
-    borderTop: '1px solid #eee',
-    marginTop: '12px',
-    paddingTop: '12px'
-  },
-  form: {
-    backgroundColor: '#fff', padding: '24px',
-    borderRadius: '12px', marginBottom: '24px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    border: '2px solid #4f46e5'
-  },
-  formTitle: {
-    margin: '0 0 16px',
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  input: {
-    width: '100%', padding: '10px 14px',
-    marginBottom: '12px', borderRadius: '8px',
-    border: '1px solid #ddd', fontSize: '14px',
-    boxSizing: 'border-box'
-  },
-  textarea: {
-    width: '100%', padding: '10px 14px',
-    marginBottom: '12px', borderRadius: '8px',
-    border: '1px solid #ddd', fontSize: '14px',
-    boxSizing: 'border-box', height: '100px', resize: 'vertical'
-  },
-  formActions: { display: 'flex', gap: '12px' },
-  submitBtn: {
-    padding: '10px 24px', backgroundColor: '#4f46e5',
-    color: '#fff', border: 'none', borderRadius: '8px',
-    cursor: 'pointer', fontSize: '14px', fontWeight: '600'
-  },
-  cancelBtn: {
-    padding: '10px 24px', backgroundColor: '#e5e7eb',
-    color: '#666', border: 'none', borderRadius: '8px',
-    cursor: 'pointer', fontSize: '14px'
-  },
-  empty: {
-    textAlign: 'center', padding: '80px 40px',
-    backgroundColor: '#fff', borderRadius: '12px',
-    color: '#888', fontSize: '18px'
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-    gap: '20px'
-  },
-  card: {
-    backgroundColor: '#fff', padding: '24px',
-    borderRadius: '12px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    borderLeft: '4px solid #4f46e5',
-    transition: 'all 0.2s',
-    cursor: 'default'
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px',
-    gap: '12px'
-  },
-  cardTitle: { margin: 0, color: '#333', fontSize: '18px', fontWeight: '600' },
-  badge: {
-    display: 'inline-block',
-    padding: '4px 10px',
-    backgroundColor: '#eef2ff',
-    color: '#4f46e5',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: '600',
-    whiteSpace: 'nowrap'
-  },
-  cardDesc: { color: '#666', fontSize: '14px', margin: '0 0 10px', lineHeight: '1.5' },
-  cardDate: { color: '#999', fontSize: '12px', margin: '0 0 8px' },
-  sharedInfo: {
-    color: '#10b981',
-    fontSize: '12px',
-    margin: '0 0 12px',
-    fontWeight: '600'
-  },
-  btnRow: { display: 'flex', gap: '10px', marginTop: '16px' },
-  viewBtn: {
-    padding: '8px 12px', backgroundColor: '#eef2ff',
-    color: '#4f46e5', border: 'none', borderRadius: '6px',
-    cursor: 'pointer', fontSize: '12px', fontWeight: '600',
-    flex: 1, transition: 'all 0.2s'
-  },
-  shareBtn: {
-    padding: '8px 12px',
-    backgroundColor: '#10b981',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    flex: 1,
-    transition: 'all 0.2s'
-  }
-}
-
-export default Projects
+export default Projects;

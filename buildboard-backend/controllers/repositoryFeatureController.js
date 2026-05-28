@@ -20,6 +20,7 @@ const PullRequest = require('../models/PullRequest');
 const Issue = require('../models/Issue');
 const ActivityLog = require('../models/ActivityLog');
 const Notification = require('../models/Notification');
+const ChatMessage = require('../models/ChatMessage');
 const { emitToRepo, emitToUser } = require('../config/socket');
 
 const repoPopulate = [
@@ -76,8 +77,6 @@ const resolveRepo = async (req) => {
 };
 
 const canWrite = (req, repoDoc) => {
-  if (req.user?.role === 'reviewer' || req.user?.role === 'admin') return true;
-  
   const userId = req.user._id.toString();
   if (repoDoc.owner?._id?.toString() === userId) return true;
 
@@ -87,28 +86,9 @@ const canWrite = (req, repoDoc) => {
   });
 };
 
-const canRead = (req, repoDoc) => {
-  if (repoDoc.visibility === 'public') return true;
-  if (req.user?.role === 'reviewer' || req.user?.role === 'admin') return true;
-
-  const userId = req.user?._id?.toString();
-  if (!userId) return false;
-
-  if (repoDoc.owner?._id?.toString() === userId) return true;
-
-  return repoDoc.collaborators.some((collaborator) => {
-    const collaboratorId = collaborator.user?._id?.toString?.() || collaborator.user?.toString();
-    return collaboratorId === userId;
-  });
-};
-
 const ensureRepo = async (req, res) => {
   const repoDoc = await resolveRepo(req);
   if (!repoDoc) {
-    res.status(404).json({ message: 'Repository not found' });
-    return null;
-  }
-  if (!canRead(req, repoDoc)) {
     res.status(404).json({ message: 'Repository not found' });
     return null;
   }
@@ -449,6 +429,60 @@ exports.moveFile = async (req, res) => {
     });
 
     res.json({ file, commit });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.runCode = async (req, res) => {
+  try {
+    const { code, language } = req.body;
+    if (!code) return res.status(400).json({ message: 'Code is required' });
+
+    const { execFile } = require('child_process');
+    const fs = require('fs').promises;
+    const os = require('os');
+    const path = require('path');
+    
+    // Create a temporary directory
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'buildboard-run-'));
+    let tempFile = '';
+    let cmd = '';
+    let args = [];
+
+    if (language === 'javascript' || language === 'typescript') {
+      tempFile = path.join(tempDir, 'script.js');
+      await fs.writeFile(tempFile, code);
+      cmd = 'node';
+      args = [tempFile];
+    } else if (language === 'python') {
+      tempFile = path.join(tempDir, 'script.py');
+      await fs.writeFile(tempFile, code);
+      cmd = 'python';
+      args = [tempFile];
+    } else {
+      return res.status(400).json({ message: 'Unsupported language for execution. Currently only JavaScript and Python are supported.' });
+    }
+
+    // Execute with a timeout of 5 seconds to prevent infinite loops
+    execFile(cmd, args, { timeout: 5000, maxBuffer: 1024 * 1024 }, async (error, stdout, stderr) => {
+      // Cleanup temp dir
+      try {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      } catch (e) {
+        console.error('Failed to cleanup temp dir:', e);
+      }
+
+      if (error && error.killed) {
+        return res.status(200).json({ stdout: '', stderr: 'Execution timed out (5s limit)' });
+      }
+      
+      res.status(200).json({
+        stdout: stdout || '',
+        stderr: stderr || (error ? error.message : '')
+      });
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -1479,6 +1513,45 @@ exports.getInsights = async (req, res) => {
       activity,
       health: { issueResolutionRate, prMergeRate, activityScore },
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getChatMessages = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+
+    const messages = await ChatMessage.find({ repository: repoDoc._id })
+      .populate('sender', 'username name avatar')
+      .sort({ createdAt: 1 })
+      .limit(100);
+
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.postChatMessage = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ message: 'Content is required' });
+
+    const message = await ChatMessage.create({
+      repository: repoDoc._id,
+      sender: req.user._id,
+      content,
+    });
+
+    const populatedMessage = await ChatMessage.findById(message._id).populate('sender', 'username name avatar');
+    emitToRepo(repoDoc._id.toString(), 'chat:message', populatedMessage);
+
+    res.status(201).json(populatedMessage);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

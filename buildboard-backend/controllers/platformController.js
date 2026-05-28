@@ -63,7 +63,11 @@ exports.getHomeDashboard = async (req, res) => {
         $or: [{ user: userId }, { repository: { $in: ownedRepoIds } }],
       })
         .populate('user', 'username name avatar')
-        .populate('repository', 'name slug owner')
+        .populate({
+          path: 'repository',
+          select: 'name slug owner',
+          populate: { path: 'owner', select: 'username name avatar' }
+        })
         .sort({ createdAt: -1 })
         .limit(20),
       Notification.find({ recipient: userId })

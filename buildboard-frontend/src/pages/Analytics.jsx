@@ -1,409 +1,286 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
+import axios from 'axios';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell 
+} from 'recharts';
+import { GlassCard, NeonButton, CyberSkeleton } from '../components/ui';
+import { 
+  BarChart3, FolderGit2, Package, MessageSquare, Users, 
+  Activity, ChevronLeft, AlertCircle, Trophy, Star
+} from 'lucide-react';
+import { pageVariants, listVariants, itemVariants } from '../utils/animations';
 
 function Analytics() {
-  const navigate = useNavigate()
-  const [user, setUser] = useState(null)
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const token = localStorage.getItem('token')
+  const navigate = useNavigate();
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  useEffect(() => {
-    // Check if user is logged in
-    const userData = JSON.parse(localStorage.getItem('user') || '{}')
-    
-    if (!userData || !userData.id || !token) {
-      setError('Not logged in')
-      setLoading(false)
-      return
-    }
-
-    setUser(userData)
-    fetchAnalytics()
-  }, [token])
-
-  const fetchAnalytics = async () => {
-    try {
-      console.log('📊 Fetching analytics...')
-      setLoading(true)
-      setError(null)
-
+  const { data: stats, isLoading, error } = useQuery({
+    queryKey: ['analyticsDashboard'],
+    queryFn: async () => {
       const res = await axios.get('http://localhost:5000/api/analytics/dashboard', {
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      })
+        headers: { Authorization: token }
+      });
+      return res.data;
+    },
+    enabled: !!token
+  });
 
-      console.log('✅ Analytics fetched:', res.data)
-      setStats(res.data)
-      setLoading(false)
-    } catch (err) {
-      console.error('❌ Error fetching analytics:', err.message)
-      console.error('❌ Error response:', err.response?.data)
-      
-      if (err.response?.status === 401) {
-        setError('Session expired. Please login again.')
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        setTimeout(() => navigate('/'), 2000)
-      } else {
-        setError(err.response?.data?.message || 'Failed to load analytics')
-      }
-      setLoading(false)
-    }
+  if (!token || !user?.id) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] p-8">
+        <GlassCard glowColor="var(--brand-danger)" className="p-12 text-center max-w-md border-[var(--brand-danger)]/50 bg-[var(--brand-danger)]/5">
+          <AlertCircle size={48} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <h2 className="text-xl font-display font-bold text-white mb-2">ACCESS_DENIED</h2>
+          <p className="text-sm font-mono text-[var(--text-muted)] mb-6">Unauthorized access to analytics matrix.</p>
+          <NeonButton variant="ghost" onClick={() => navigate('/login')}>AUTHENTICATE</NeonButton>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center gap-4 mb-8">
+          <CyberSkeleton className="w-10 h-10 rounded-lg" />
+          <CyberSkeleton className="w-64 h-8" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
+          {[1, 2, 3, 4].map(i => <CyberSkeleton key={i} className="h-32 rounded-xl" />)}
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {[1, 2].map(i => <CyberSkeleton key={i} className="h-[400px] rounded-xl" />)}
+        </div>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
-          <button style={styles.backBtn} onClick={() => navigate('/dashboard')}>
-            ← Back
-          </button>
-        </div>
-        <div style={styles.body}>
-          <div style={styles.errorBox}>
-            <p>❌ {error}</p>
-            <button style={styles.retryBtn} onClick={fetchAnalytics}>
-              🔄 Retry
-            </button>
-            <button 
-              style={{ ...styles.retryBtn, backgroundColor: '#666', marginLeft: '10px' }}
-              onClick={() => navigate('/dashboard')}
-            >
-              ← Back to Dashboard
-            </button>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[60vh] p-8">
+        <GlassCard glowColor="var(--brand-danger)" className="p-12 text-center max-w-md border-[var(--brand-danger)]/50 bg-[var(--brand-danger)]/5">
+          <AlertCircle size={48} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <h2 className="text-xl font-display font-bold text-white mb-2">SYSTEM_ERROR</h2>
+          <p className="text-sm font-mono text-[var(--text-muted)] mb-6">Failed to retrieve telemetry data.</p>
+          <NeonButton variant="primary" onClick={() => navigate('/dashboard')}>RETURN_TO_DASHBOARD</NeonButton>
+        </GlassCard>
       </div>
-    )
+    );
   }
 
-  if (loading) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
+  const StatCard = ({ title, value, icon: Icon, colorClass, gradientClass }) => (
+    <GlassCard className={`p-6 relative overflow-hidden group border-${colorClass}/30 hover:border-${colorClass}`}>
+      <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2 opacity-20 group-hover:opacity-40 transition-opacity ${gradientClass}`} />
+      <div className="relative z-10 flex flex-col h-full justify-between gap-4">
+        <div className={`w-12 h-12 rounded-lg bg-${colorClass}/10 flex items-center justify-center text-${colorClass} border border-${colorClass}/20`}>
+          <Icon size={24} />
         </div>
-        <div style={styles.body}>
-          <p style={styles.loading}>⏳ Loading analytics...</p>
+        <div>
+          <h3 className="text-xs font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{title}</h3>
+          <p className="text-3xl font-display font-bold text-white">{value}</p>
         </div>
       </div>
-    )
-  }
+    </GlassCard>
+  );
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-black/90 border border-[var(--glass-border)] p-3 rounded-lg shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-md">
+          <p className="text-xs font-mono text-[var(--text-muted)] mb-1">{label}</p>
+          <p className="text-sm font-bold text-[var(--brand-primary)]">
+            {payload[0].value} <span className="text-[var(--text-muted)] font-normal text-xs">{payload[0].name}</span>
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div style={styles.container}>
-      {/* NAVBAR */}
-      <div style={styles.navbar}>
-        <h2 style={styles.logo}>BuildBoard+</h2>
-        <button style={styles.backBtn} onClick={() => navigate('/dashboard')}>
-          ← Back
+    <motion.div 
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="max-w-7xl mx-auto p-4 md:p-8 space-y-8"
+    >
+      <div className="flex items-center gap-4 border-b border-[var(--glass-border)] pb-6">
+        <button 
+          onClick={() => navigate('/dashboard')}
+          className="w-10 h-10 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:border-[var(--brand-primary)] transition-all group"
+        >
+          <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
         </button>
-      </div>
-
-      {/* BODY */}
-      <div style={styles.body}>
-        <h1 style={styles.title}>📊 Analytics Dashboard</h1>
-
-        {/* STATS CARDS */}
-        <div style={styles.statsGrid}>
-          <StatCard
-            icon="📁"
-            title="Total Projects"
-            value={stats?.projects || 0}
-            color="#4f46e5"
-          />
-          <StatCard
-            icon="📦"
-            title="Total Versions"
-            value={stats?.versions || 0}
-            color="#10b981"
-          />
-          <StatCard
-            icon="💬"
-            title="Total Feedback"
-            value={stats?.feedback || 0}
-            color="#f97316"
-          />
-          <StatCard
-            icon="👥"
-            title="Active Users"
-            value={stats?.users || 0}
-            color="#8b5cf6"
-          />
+        <div>
+          <h1 className="text-2xl md:text-3xl font-display font-bold flex items-center gap-3 text-white">
+            <BarChart3 className="text-[var(--brand-primary)]" />
+            TELEMETRY_DASHBOARD
+          </h1>
+          <p className="text-sm font-mono text-[var(--text-muted)] mt-1">
+            Global system analytics and performance metrics.
+          </p>
         </div>
-
-        {/* RECENT ACTIVITIES */}
-        <div style={styles.card}>
-          <h2 style={styles.cardTitle}>📋 Recent Activities</h2>
-          {stats?.recentActivities && stats.recentActivities.length > 0 ? (
-            <div style={styles.activityList}>
-              {stats.recentActivities.slice(0, 10).map((activity, index) => (
-                <div key={index} style={styles.activityItem}>
-                  <span style={styles.activityIcon}>📌</span>
-                  <div>
-                    <p style={styles.activityTitle}>{activity.title}</p>
-                    <p style={styles.activityDate}>
-                      {new Date(activity.date).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={styles.noData}>No recent activities</p>
-          )}
-        </div>
-
-        {/* TOP REVIEWERS */}
-        {stats?.topReviewers && stats.topReviewers.length > 0 && (
-          <div style={styles.card}>
-            <h2 style={styles.cardTitle}>👥 Top Reviewers</h2>
-            <div style={styles.reviewerList}>
-              {stats.topReviewers.map((reviewer, index) => (
-                <div key={index} style={styles.reviewerItem}>
-                  <span style={styles.reviewerRank}>#{index + 1}</span>
-                  <div>
-                    <p style={styles.reviewerName}>{reviewer.name}</p>
-                    <p style={styles.reviewerStats}>{reviewer.feedbackCount} feedbacks</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* MOST COMMENTED PROJECTS */}
-        {stats?.mostCommentedProjects && stats.mostCommentedProjects.length > 0 && (
-          <div style={styles.card}>
-            <h2 style={styles.cardTitle}>🔥 Most Commented Projects</h2>
-            <div style={styles.projectList}>
-              {stats.mostCommentedProjects.map((project, index) => (
-                <div key={index} style={styles.projectItem}>
-                  <p style={styles.projectName}>{project.title}</p>
-                  <p style={styles.projectStats}>{project.commentCount} comments</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
-    </div>
-  )
-}
 
-function StatCard({ icon, title, value, color }) {
-  return (
-    <div style={{ ...styles.statCard, borderLeftColor: color }}>
-      <div style={styles.statIcon}>{icon}</div>
-      <div>
-        <h3 style={styles.statTitle}>{title}</h3>
-        <p style={styles.statValue}>{value}</p>
+      <motion.div 
+        variants={listVariants}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6"
+      >
+        <motion.div variants={itemVariants}>
+          <StatCard 
+            title="Total Projects" 
+            value={stats?.projects || 0} 
+            icon={FolderGit2} 
+            colorClass="[var(--brand-primary)]" 
+            gradientClass="bg-[var(--brand-primary)]"
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard 
+            title="Total Versions" 
+            value={stats?.versions || 0} 
+            icon={Package} 
+            colorClass="[var(--brand-success)]" 
+            gradientClass="bg-[var(--brand-success)]"
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard 
+            title="Total Diagnostics" 
+            value={stats?.feedback || 0} 
+            icon={MessageSquare} 
+            colorClass="[var(--brand-warning)]" 
+            gradientClass="bg-[var(--brand-warning)]"
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard 
+            title="Active Operatives" 
+            value={stats?.users || 0} 
+            icon={Users} 
+            colorClass="[var(--brand-purple)]" 
+            gradientClass="bg-[var(--brand-purple)]"
+          />
+        </motion.div>
+      </motion.div>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Most Commented Projects Chart */}
+        <motion.div variants={itemVariants} className="lg:col-span-2">
+          <GlassCard className="h-full flex flex-col p-6">
+            <h2 className="text-lg font-display font-bold flex items-center gap-2 mb-6">
+              <Star className="text-[var(--brand-primary)]" size={18} />
+              HIGH_ACTIVITY_PROJECTS
+            </h2>
+            <div className="flex-1 min-h-[300px] w-full">
+              {stats?.mostCommentedProjects?.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.mostCommentedProjects} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis 
+                      dataKey="title" 
+                      tick={{ fill: 'var(--text-muted)', fontSize: 12, fontFamily: 'monospace' }}
+                      axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                      tickLine={false}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis 
+                      tick={{ fill: 'var(--text-muted)', fontSize: 12, fontFamily: 'monospace' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,240,255,0.05)' }} />
+                    <Bar dataKey="commentCount" name="Comments" radius={[4, 4, 0, 0]}>
+                      {stats.mostCommentedProjects.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${190 + index * 10}, 100%, 50%)`} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-[var(--text-muted)] font-mono text-sm">
+                  NO_DATA_AVAILABLE
+                </div>
+              )}
+            </div>
+          </GlassCard>
+        </motion.div>
+
+        {/* Top Reviewers */}
+        <motion.div variants={itemVariants}>
+          <GlassCard className="h-full p-6">
+            <h2 className="text-lg font-display font-bold flex items-center gap-2 mb-6">
+              <Trophy className="text-[var(--brand-warning)]" size={18} />
+              TOP_OPERATIVES
+            </h2>
+            {stats?.topReviewers?.length > 0 ? (
+              <div className="space-y-4">
+                {stats.topReviewers.map((reviewer, index) => (
+                  <div key={index} className="flex items-center gap-4 bg-[var(--bg-tertiary)] p-3 rounded-lg border border-[var(--glass-border)]">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-display font-bold text-sm ${
+                      index === 0 ? 'bg-[var(--brand-warning)]/20 text-[var(--brand-warning)] border border-[var(--brand-warning)]/30' :
+                      index === 1 ? 'bg-[#9ca3af]/20 text-[#9ca3af] border border-[#9ca3af]/30' :
+                      index === 2 ? 'bg-[#b45309]/20 text-[#b45309] border border-[#b45309]/30' :
+                      'bg-[var(--bg-main)] text-[var(--text-muted)] border border-[var(--glass-border)]'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-white truncate">{reviewer.name}</p>
+                      <p className="text-xs font-mono text-[var(--text-muted)]">{reviewer.feedbackCount} Diagnostics</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center text-[var(--text-muted)] font-mono text-sm">
+                NO_DATA_AVAILABLE
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
+
+        {/* Recent Activities */}
+        <motion.div variants={itemVariants} className="lg:col-span-3">
+          <GlassCard className="p-6">
+            <h2 className="text-lg font-display font-bold flex items-center gap-2 mb-6">
+              <Activity className="text-[var(--brand-success)]" size={18} />
+              SYSTEM_ACTIVITY_LOG
+            </h2>
+            
+            {stats?.recentActivities?.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {stats.recentActivities.slice(0, 9).map((activity, index) => (
+                  <div key={index} className="flex items-start gap-3 bg-[var(--bg-tertiary)] p-4 rounded-lg border border-[var(--glass-border)] hover:border-[var(--brand-primary)]/50 transition-colors">
+                    <div className="w-2 h-2 rounded-full bg-[var(--brand-success)] mt-1.5 shrink-0 shadow-[0_0_8px_var(--brand-success)]" />
+                    <div>
+                      <p className="text-sm font-bold text-[var(--text-main)] mb-1 leading-tight">{activity.title}</p>
+                      <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase">
+                        {new Date(activity.date).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-[var(--text-muted)] font-mono text-sm border border-dashed border-[var(--glass-border)] rounded-lg bg-[var(--bg-tertiary)]/50">
+                NO_RECENT_ACTIVITY
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
       </div>
-    </div>
-  )
+    </motion.div>
+  );
 }
 
-const styles = {
-  container: {
-    minHeight: '100vh',
-    backgroundColor: '#f0f2f5',
-    fontFamily: 'system-ui, -apple-system, sans-serif'
-  },
-  navbar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '16px 32px',
-    backgroundColor: '#4f46e5',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-  },
-  logo: {
-    margin: 0,
-    color: '#fff',
-    fontSize: '24px',
-    fontWeight: '700'
-  },
-  backBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#fff',
-    color: '#4f46e5',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600'
-  },
-  body: {
-    padding: '32px',
-    maxWidth: '1400px',
-    margin: '0 auto'
-  },
-  title: {
-    margin: '0 0 30px',
-    fontSize: '32px',
-    fontWeight: '700',
-    color: '#333'
-  },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-    gap: '20px',
-    marginBottom: '30px'
-  },
-  statCard: {
-    backgroundColor: '#fff',
-    padding: '20px',
-    borderRadius: '12px',
-    borderLeft: '4px solid',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-    display: 'flex',
-    gap: '15px',
-    alignItems: 'center'
-  },
-  statIcon: {
-    fontSize: '32px'
-  },
-  statTitle: {
-    margin: '0 0 5px',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#666'
-  },
-  statValue: {
-    margin: 0,
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#333'
-  },
-  card: {
-    backgroundColor: '#fff',
-    padding: '20px',
-    borderRadius: '12px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-    marginBottom: '20px'
-  },
-  cardTitle: {
-    margin: '0 0 20px',
-    fontSize: '18px',
-    fontWeight: '700',
-    color: '#333'
-  },
-  activityList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '15px'
-  },
-  activityItem: {
-    display: 'flex',
-    gap: '15px',
-    padding: '15px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px',
-    alignItems: 'flex-start'
-  },
-  activityIcon: {
-    fontSize: '20px'
-  },
-  activityTitle: {
-    margin: '0 0 5px',
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  activityDate: {
-    margin: 0,
-    fontSize: '12px',
-    color: '#999'
-  },
-  reviewerList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px'
-  },
-  reviewerItem: {
-    display: 'flex',
-    gap: '15px',
-    alignItems: 'center',
-    padding: '12px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px'
-  },
-  reviewerRank: {
-    fontSize: '16px',
-    fontWeight: '700',
-    color: '#4f46e5'
-  },
-  reviewerName: {
-    margin: '0 0 5px',
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  reviewerStats: {
-    margin: 0,
-    fontSize: '12px',
-    color: '#999'
-  },
-  projectList: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: '15px'
-  },
-  projectItem: {
-    padding: '15px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px'
-  },
-  projectName: {
-    margin: '0 0 8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  projectStats: {
-    margin: 0,
-    fontSize: '13px',
-    color: '#4f46e5',
-    fontWeight: '600'
-  },
-  errorBox: {
-    backgroundColor: '#fee',
-    border: '2px solid #fcc',
-    borderRadius: '12px',
-    padding: '30px',
-    textAlign: 'center',
-    color: '#c33'
-  },
-  retryBtn: {
-    marginTop: '16px',
-    padding: '10px 20px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600'
-  },
-  loading: {
-    textAlign: 'center',
-    padding: '40px',
-    color: '#666',
-    fontSize: '16px'
-  },
-  noData: {
-    textAlign: 'center',
-    padding: '20px',
-    color: '#999',
-    fontSize: '14px'
-  }
-}
-
-export default Analytics
+export default Analytics;

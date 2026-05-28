@@ -1,75 +1,62 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../lib/api';
-
-const navItems = [
-  { to: '/', label: 'Home' },
-  { to: '/explore', label: 'Explore' },
-  { to: '/organizations', label: 'Organizations' },
-  { to: '/admin', label: 'Admin' },
-];
+import { pageTransition, sidebarTransition } from '../../utils/animations';
+import { NeonButton, CyberDropdown, CyberDropdownItem, CyberInput } from '../ui';
+import { 
+  Menu, Search, Bot, Cloud, Plus, CircleDot, GitPullRequest, 
+  Layout, Inbox, Book, Moon, Sun, User, Settings, LogOut, X, 
+  Cpu, Zap, GitBranch, Home, ChevronRight
+} from 'lucide-react';
+import { twMerge } from 'tailwind-merge';
 
 const pageTitles = {
   '/': 'Dashboard',
   '/explore': 'Explore',
   '/organizations': 'Organizations',
   '/admin': 'Admin',
-  '/new': 'New repository',
+  '/new': 'New Repository',
   '/profile': 'Profile',
   '/issues': 'Issues',
   '/pulls': 'Pull Requests',
   '/notifications': 'Notifications',
 };
 
-/* ──────────────── Icons ──────────────── */
-const Icon = ({ children, size = 18 }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {children}
-  </svg>
-);
-const MenuIcon       = () => <Icon><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></Icon>;
-const SearchIcon     = () => <Icon size={17}><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></Icon>;
-const ChevronIcon    = () => <Icon size={13}><path d="m6 9 6 6 6-6" /></Icon>;
-const BotIcon        = () => <Icon><rect x="6" y="8" width="12" height="10" rx="3" /><path d="M12 4v4" /><path d="M9 13h.01" /><path d="M15 13h.01" /><path d="M9 18v2" /><path d="M15 18v2" /></Icon>;
-const CloudIcon      = () => <Icon><path d="M17.5 19H8a5 5 0 1 1 1.4-9.8A6 6 0 0 1 21 12.5" /><path d="M16 16l3-3 3 3" /><path d="M19 13v8" /></Icon>;
-const PlusIcon       = () => <Icon><path d="M12 5v14" /><path d="M5 12h14" /></Icon>;
-const IssueIcon      = () => <Icon><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="2" /></Icon>;
-const PullRequestIcon= () => <Icon><circle cx="6" cy="6" r="2" /><circle cx="18" cy="18" r="2" /><path d="M6 8v8a2 2 0 0 0 2 2h6" /><path d="M18 16V6" /><path d="m15 9 3-3 3 3" /></Icon>;
-const ProjectIcon    = () => <Icon><rect x="5" y="4" width="14" height="16" rx="2" /><path d="M8 8h8" /><path d="M8 12h8" /><path d="M8 16h5" /></Icon>;
-const InboxIcon      = () => <Icon><path d="M4 5h16l-2 9H6L4 5Z" /><path d="M6 14v4h12v-4" /><path d="M9 14a3 3 0 0 0 6 0" /></Icon>;
-const BookIcon       = () => <Icon><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z" /></Icon>;
-const MoonIcon       = () => <Icon><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z" /></Icon>;
-const SunIcon        = () => <Icon><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="M4.9 4.9l1.4 1.4" /><path d="m17.7 17.7 1.4 1.4" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.3 17.7-1.4 1.4" /><path d="m19.1 4.9-1.4 1.4" /></Icon>;
-const UserIcon       = () => <Icon size={14}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Icon>;
-const SettingsIcon   = () => <Icon size={14}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></Icon>;
-const LogOutIcon     = () => <Icon size={14}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></Icon>;
-const SendIcon       = () => <Icon size={15}><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></Icon>;
-const XIcon          = () => <Icon size={16}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
-
 /* ──────────────── HeaderButton ──────────────── */
-const HeaderButton = ({ label, children, dropdown = false, active = false, badge = false, onClick, as: Component = 'button', to, className = '' }) => {
-  const buttonClassName = `header-button ${active ? 'header-button-active' : ''} ${className}`;
+const HeaderButton = ({ label, children, active = false, badge = false, onClick, as: Component = 'button', to, className = '' }) => {
   const content = (
     <>
       <span className="relative grid place-items-center">
         {children}
-        {badge && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--bg-subtle)] bg-[var(--brand-primary)]" />}
+        {badge && (
+          <span className="absolute -right-1 -top-1 flex h-2.5 w-2.5 items-center justify-center">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--brand-primary)] opacity-75"></span>
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--brand-primary)]"></span>
+          </span>
+        )}
       </span>
-      {dropdown && <ChevronIcon />}
     </>
   );
+  
+  const baseClass = twMerge(
+    'p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]',
+    active && 'text-[var(--brand-primary)] bg-[var(--brand-primary)]/10',
+    className
+  );
+
   if (Component === Link) {
     return (
-      <Link to={to} className={buttonClassName} aria-label={label} title={label}>
+      <Link to={to} className={baseClass} aria-label={label} title={label}>
         {content}
       </Link>
     );
   }
   return (
-    <button type="button" className={buttonClassName} aria-label={label} title={label} onClick={onClick}>
+    <button type="button" className={baseClass} aria-label={label} title={label} onClick={onClick}>
       {content}
     </button>
   );
@@ -94,30 +81,35 @@ const CommandPalette = ({ open, onClose }) => {
     return [
       ...(data.repositories || []).map((repo) => ({
         type: 'Repository',
+        icon: <Book size={16} />,
         label: `${repo.owner?.username || 'owner'}/${repo.slug}`,
         description: repo.description,
         to: `/${repo.owner?.username}/${repo.slug}`,
       })),
       ...(data.issues || []).map((issue) => ({
         type: 'Issue',
+        icon: <CircleDot size={16} />,
         label: `#${issue.number} ${issue.title}`,
         description: issue.status,
         to: '/issues',
       })),
       ...(data.pullRequests || []).map((pr) => ({
-        type: 'Pull request',
+        type: 'Pull Request',
+        icon: <GitPullRequest size={16} />,
         label: `#${pr.number} ${pr.title}`,
         description: pr.status,
         to: '/pulls',
       })),
       ...(data.users || []).map((user) => ({
         type: 'User',
+        icon: <User size={16} />,
         label: user.username,
         description: user.name,
         to: '/profile',
       })),
       ...(data.organizations || []).map((org) => ({
         type: 'Organization',
+        icon: <Layout size={16} />,
         label: org.slug,
         description: org.name,
         to: '/organizations',
@@ -132,13 +124,6 @@ const CommandPalette = ({ open, onClose }) => {
         if (open) onClose();
         if (!open) window.dispatchEvent(new CustomEvent('buildboard:open-command-palette'));
       }
-      if (event.key === '/') {
-        const tagName = document.activeElement?.tagName?.toLowerCase();
-        if (!['input', 'textarea', 'select'].includes(tagName)) {
-          event.preventDefault();
-          if (!open) window.dispatchEvent(new CustomEvent('buildboard:open-command-palette'));
-        }
-      }
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKeyDown);
@@ -148,111 +133,78 @@ const CommandPalette = ({ open, onClose }) => {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 px-4 py-20" onMouseDown={onClose}>
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-[var(--border-main)] bg-[var(--bg-main)] shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-2 border-b border-[var(--border-main)] px-4 py-3">
-          <SearchIcon />
-          <input autoFocus className="w-full bg-transparent text-sm outline-none" placeholder="Search users, repos, issues, pull requests…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button type="button" className="btn-secondary px-2 py-1 text-xs" onClick={onClose}>Esc</button>
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 pointer-events-auto">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: -20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: -20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="relative w-full max-w-2xl glass-panel shadow-[0_0_50px_rgba(0,212,255,0.15)] flex flex-col overflow-hidden"
+      >
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-purple)] to-[var(--brand-success)] opacity-80" />
+        
+        <div className="flex items-center gap-3 p-4 border-b border-[var(--glass-border)]">
+          <Search className="text-[var(--brand-primary)]" />
+          <input 
+            autoFocus 
+            className="flex-1 bg-transparent text-lg text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)]" 
+            placeholder="Search the nexus..." 
+            value={query} 
+            onChange={(e) => setQuery(e.target.value)} 
+          />
+          <div className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-2 py-1 rounded border border-[var(--glass-border)]">ESC</div>
         </div>
-        <div className="max-h-[420px] overflow-y-auto p-2">
+        
+        <div className="max-h-[60vh] overflow-y-auto cyber-scrollbar">
           {query.trim().length < 2 ? (
-            <div className="px-3 py-10 text-center text-sm text-[var(--text-muted)]">Type at least two characters to search BuildBoard+.</div>
+            <div className="py-12 flex flex-col items-center justify-center text-[var(--text-muted)]">
+              <Zap size={32} className="mb-4 opacity-30" />
+              <p>Initialize search by typing</p>
+            </div>
           ) : isFetching ? (
-            <div className="space-y-2 p-3">{[1,2,3,4].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-[var(--bg-subtle)]" />)}</div>
+            <div className="p-4 space-y-3">
+              {[1,2,3,4].map((i) => (
+                <div key={i} className="h-14 animate-[shimmer-neon_2s_infinite] bg-gradient-to-r from-[var(--bg-tertiary)] via-[rgba(0,212,255,0.05)] to-[var(--bg-tertiary)] rounded-lg" style={{ backgroundSize: '200% 100%' }} />
+              ))}
+            </div>
           ) : results.length ? (
-            <div className="space-y-1">
+            <div className="p-2 space-y-1">
               {results.map((result, idx) => (
-                <button key={`${result.type}-${result.label}-${idx}`} type="button"
-                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-[var(--bg-subtle)]"
+                <button 
+                  key={`${result.type}-${result.label}-${idx}`}
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-lg p-3 text-left hover:bg-[var(--glass-highlight)] transition-colors group outline-none focus-visible:bg-[var(--glass-highlight)]"
                   onClick={() => { onClose(); navigate(result.to); }}
                 >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{result.label}</span>
-                    <span className="block truncate text-xs text-[var(--text-muted)]">{result.description || result.type}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-[var(--bg-tertiary)] text-[var(--text-muted)] rounded-md group-hover:text-[var(--brand-primary)] group-hover:bg-[var(--brand-primary)]/10 transition-colors">
+                      {result.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-[var(--text-main)] group-hover:text-[var(--brand-primary)] transition-colors">{result.label}</div>
+                      <div className="truncate text-xs text-[var(--text-muted)]">{result.description || result.type}</div>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-mono tracking-wider uppercase text-[var(--brand-primary)] opacity-0 group-hover:opacity-100 transition-opacity">
+                    JUMP_TO
                   </span>
-                  <span className="ml-3 shrink-0 rounded-full border border-[var(--border-main)] px-2 py-0.5 text-xs text-[var(--text-muted)]">{result.type}</span>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="px-3 py-10 text-center text-sm text-[var(--text-muted)]">No results found.</div>
+            <div className="py-12 text-center text-[var(--text-muted)]">
+              <p>NO DATA FOUND IN NEXUS.</p>
+            </div>
           )}
         </div>
-      </div>
-    </div>
-  );
-};
-
-
-/* ──────────────── Profile Dropdown ──────────────── */
-const ProfileDropdown = ({ user, onClose, onLogout }) => {
-  const navigate = useNavigate();
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  const go = (to) => { onClose(); navigate(to); };
-
-  return (
-    <div ref={dropdownRef} className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-lg border border-[var(--border-main)] bg-[var(--bg-main)] shadow-2xl">
-      {/* User info */}
-      <div className="border-b border-[var(--border-main)] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-[var(--border-main)] bg-[var(--bg-subtle)]">
-            {user?.avatar
-              ? <img src={user.avatar} alt="" className="h-full w-full object-cover" />
-              : <span className="flex h-full w-full items-center justify-center text-sm font-bold">{(user?.username || 'B').slice(0,1).toUpperCase()}</span>
-            }
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{user?.name || user?.username}</div>
-            <div className="truncate text-xs text-[var(--text-muted)]">@{user?.username}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Menu items */}
-      <div className="py-1">
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--bg-subtle)]" onClick={() => go('/profile')}>
-          <UserIcon /> Your profile
-        </button>
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--bg-subtle)]" onClick={() => go('/explore')}>
-          <span className="opacity-70"><BookIcon /></span> Your repositories
-        </button>
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--bg-subtle)]" onClick={() => go('/organizations')}>
-          <span className="opacity-70"><ProjectIcon /></span> Your organizations
-        </button>
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--bg-subtle)]" onClick={() => go('/issues')}>
-          <span className="opacity-70"><IssueIcon /></span> Your issues
-        </button>
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--bg-subtle)]" onClick={() => go('/pulls')}>
-          <span className="opacity-70"><PullRequestIcon /></span> Your pull requests
-        </button>
-        {(user?.role === 'admin' || user?.role === 'reviewer') && (
-          <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm text-[var(--brand-primary)] hover:bg-[var(--bg-subtle)]" onClick={() => go('/reviewer')}>
-            <span className="opacity-70"><ProjectIcon /></span> Reviewer Dashboard
-          </button>
-        )}
-      </div>
-
-      <div className="border-t border-[var(--border-main)] py-1">
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--bg-subtle)]" onClick={() => { onClose(); /* TODO: settings page */ }}>
-          <SettingsIcon /> Settings
-        </button>
-      </div>
-
-      <div className="border-t border-[var(--border-main)] py-1">
-        <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:bg-[var(--bg-subtle)]" onClick={onLogout}>
-          <LogOutIcon /> Sign out
-        </button>
-      </div>
+      </motion.div>
     </div>
   );
 };
@@ -271,91 +223,115 @@ const GlobalSidebar = ({ open, onClose, user, onOpenPalette }) => {
 
   const topRepos = (userRepos || []).slice(0, 5);
 
-  if (!open) return null;
-
   return (
-    <>
-      <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed left-0 top-0 z-[60] h-full w-[320px] max-w-full bg-[#0d1117] border-r border-[#30363d] flex flex-col overflow-y-auto text-sm text-[#c9d1d9] shadow-2xl transition-transform duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 mb-2">
-          <Link to="/" onClick={onClose} className="text-white hover:text-gray-300">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.699-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
-          </Link>
-          <button type="button" className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#21262d]" onClick={onClose}><XIcon /></button>
-        </div>
-
-        {/* Links */}
-        <div className="flex-1 overflow-y-auto px-3 pb-6">
-          <nav className="space-y-0.5 mb-4 font-semibold">
-            <Link to="/" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><Icon size={16}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></Icon>Home</Link>
-            <Link to="/issues" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><IssueIcon />All issues</Link>
-            <Link to="/pulls" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><PullRequestIcon />All pull requests</Link>
-            <Link to="/explore" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><BookIcon />All repositories</Link>
-            <Link to="/organizations" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><ProjectIcon />Projects</Link>
-            {(user?.role === 'admin' || user?.role === 'reviewer') && (
-              <Link to="/reviewer" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#58a6ff]"><ProjectIcon />Reviewer Dashboard</Link>
-            )}
-            <Link to="/discussions" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><Icon size={16}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></Icon>Discussions</Link>
-            <Link to="/codespaces" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><Icon size={16}><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></Icon>Codespaces</Link>
-          </nav>
-          
-          <div className="border-t border-[#30363d] my-3"></div>
-          
-          <nav className="space-y-0.5 mb-4 font-semibold">
-            <Link to="/explore" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><Icon size={16}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Icon>Explore</Link>
-            <Link to="/marketplace" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><Icon size={16}><path d="M20 21H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2z"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></Icon>Marketplace</Link>
-            <Link to="/mcp" onClick={onClose} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-[#161b22] text-[#c9d1d9]"><Icon size={16}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></Icon>MCP registry</Link>
-          </nav>
-
-          <div className="border-t border-[#30363d] my-4"></div>
-
-          <div className="px-2">
-            <div className="flex items-center justify-between text-[13px] text-[#8b949e] mb-2 font-semibold">
-              Top repositories
-              <button type="button" className="hover:text-white p-1 rounded hover:bg-[#21262d]" onClick={() => { onClose(); onOpenPalette(); }}><SearchIcon size={14}/></button>
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md" 
+            onClick={onClose} 
+          />
+          <motion.div 
+            variants={sidebarTransition}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed left-0 top-0 bottom-0 z-[60] w-[320px] max-w-[85vw] glass-panel border-l-0 rounded-l-none flex flex-col shadow-[20px_0_50px_rgba(0,0,0,0.5)]"
+          >
+            {/* Edge highlight */}
+            <div className="absolute right-0 top-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-[var(--brand-primary)] to-transparent opacity-50" />
+            
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-[var(--glass-border)]">
+              <Link to="/" onClick={onClose} className="flex items-center gap-3 group">
+                <div className="grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-purple)] text-white font-display font-bold shadow-[0_0_15px_var(--brand-primary)] group-hover:shadow-[0_0_25px_var(--brand-primary)] transition-shadow">
+                  BB
+                </div>
+                <div>
+                  <div className="font-display font-bold tracking-widest text-[var(--text-main)]">BUILDBOARD<span className="text-[var(--brand-primary)]">+</span></div>
+                  <div className="text-[10px] font-mono text-[var(--text-muted)]">NEXUS_TERMINAL_v2</div>
+                </div>
+              </Link>
+              <button 
+                type="button" 
+                className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--brand-primary)] hover:bg-[var(--glass-highlight)] transition-colors" 
+                onClick={onClose}
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div className="space-y-0.5 mt-3 font-semibold">
-              {topRepos.map((repo, idx) => {
-                const gradients = [
-                  "from-pink-500 to-violet-500",
-                  "from-orange-400 to-pink-500",
-                  "from-fuchsia-500 to-purple-600",
-                  "from-pink-400 to-rose-500",
-                  "from-indigo-500 to-blue-600",
-                ];
-                const gradient = gradients[idx % gradients.length];
-                return (
-                  <Link key={repo._id || repo.id} to={`/${user.username}/${repo.slug || repo.name}`} onClick={onClose} className="flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[#161b22] text-[13px] text-[#c9d1d9]">
-                    <div className={`w-[18px] h-[18px] rounded-full bg-gradient-to-tr ${gradient} shrink-0 border border-white/10`}></div>
-                    {user.username}/{repo.name}
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto cyber-scrollbar p-4 flex flex-col gap-6">
+              
+              {/* Primary Navigation */}
+              <div className="space-y-1">
+                <div className="text-xs font-mono text-[var(--brand-primary)] mb-2 tracking-widest uppercase opacity-70">Core_Systems</div>
+                <NavLink to="/" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><Home size={18} /> Dashboard</NavLink>
+                <NavLink to="/issues" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><CircleDot size={18} /> Issues</NavLink>
+                <NavLink to="/pulls" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><GitPullRequest size={18} /> Pull Requests</NavLink>
+                <NavLink to="/explore" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><Book size={18} /> Repositories</NavLink>
+                <NavLink to="/organizations" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><Layout size={18} /> Projects</NavLink>
+                {(user?.role === 'admin' || user?.role === 'reviewer') && (
+                  <NavLink to="/reviewer" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-purple)]/10 text-[var(--brand-purple)] shadow-[inset_2px_0_0_var(--brand-purple)]' : 'text-[var(--brand-purple)] opacity-80 hover:opacity-100 hover:bg-[var(--glass-highlight)]'}`}><Cpu size={18} /> Reviewer Terminal</NavLink>
+                )}
+              </div>
+
+              {/* Repositories */}
+              <div>
+                <div className="flex items-center justify-between text-xs font-mono text-[var(--brand-primary)] mb-2 tracking-widest uppercase opacity-70">
+                  <span>Recent_Nodes</span>
+                  <button onClick={() => { onClose(); onOpenPalette(); }} className="hover:text-[var(--text-main)] transition-colors"><Search size={14}/></button>
+                </div>
+                <div className="space-y-1">
+                  {topRepos.map((repo, idx) => (
+                    <Link key={repo._id || repo.id} to={`/${user.username}/${repo.slug || repo.name}`} onClick={onClose} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--glass-highlight)] group transition-colors">
+                      <div className="w-5 h-5 rounded bg-[var(--bg-tertiary)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--text-muted)] group-hover:text-[var(--brand-primary)] group-hover:border-[var(--brand-primary)] transition-colors">
+                        <Book size={12} />
+                      </div>
+                      <span className="text-sm font-medium text-[var(--text-muted)] group-hover:text-[var(--text-main)] truncate">
+                        {user.username}/<span className="text-[var(--text-main)]">{repo.name}</span>
+                      </span>
+                    </Link>
+                  ))}
+                  {topRepos.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-[var(--text-muted)] italic border border-dashed border-[var(--glass-border)] rounded-lg">No connected nodes.</div>
+                  )}
+                </div>
+                {userRepos && userRepos.length > 5 && (
+                  <Link to="/explore" onClick={onClose} className="mt-3 text-xs font-mono text-[var(--brand-primary)] hover:text-white px-3 flex items-center gap-1 transition-colors">
+                    VIEW_ALL_NODES <ChevronRight size={14} />
                   </Link>
-                );
-              })}
-              {topRepos.length === 0 && (
-                <div className="text-[#8b949e] px-2 py-1 text-[13px]">No repositories found.</div>
-              )}
+                )}
+              </div>
             </div>
-            {userRepos && userRepos.length > 5 ? (
-              <Link to="/explore" onClick={onClose} className="text-xs text-[#8b949e] hover:text-[#58a6ff] px-2 mt-4 font-semibold block">Show more</Link>
-            ) : (
-              <button type="button" className="text-xs text-[#8b949e] hover:text-[#58a6ff] px-2 mt-4 font-semibold">Show more</button>
-            )}
-          </div>
-        </div>
-      </div>
-    </>
+            
+            {/* Footer */}
+            <div className="p-4 border-t border-[var(--glass-border)]">
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)]">
+                <div className="w-2 h-2 rounded-full bg-[var(--brand-success)] animate-pulse shadow-[0_0_5px_var(--brand-success)]"></div>
+                <span className="text-xs font-mono text-[var(--text-muted)]">SYSTEM_ONLINE</span>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 };
 
 /* ──────────────── AppLayout ──────────────── */
 const AppLayout = () => {
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, performanceMode, togglePerformanceMode } = useTheme();
   const location = useLocation();
-  const [paletteOpen, setPaletteOpen]   = useState(false);
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
-  const [profileOpen, setProfileOpen]   = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   const pageTitle = pageTitles[location.pathname] ||
     (location.pathname.split('/').filter(Boolean).length >= 2 ? 'Repository' : 'Dashboard');
@@ -366,7 +342,20 @@ const AppLayout = () => {
     return () => window.removeEventListener('buildboard:open-command-palette', openPalette);
   }, []);
 
-  // Notification badge — fetch unread count
+  // Handle outside click for profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileOpen(false);
+      }
+    };
+    if (profileOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [profileOpen]);
+
+  // Notification badge
   const { data: notifData } = useQuery({
     queryKey: ['notif-count'],
     queryFn: async () => {
@@ -379,96 +368,149 @@ const AppLayout = () => {
   const hasUnread = (notifData || 0) > 0;
 
   return (
-    <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)]">
-      <header className="sticky top-0 z-40 border-b border-[var(--border-main)] bg-[var(--bg-subtle)]">
-        <div className="flex h-16 items-center gap-3 px-4">
-          {/* Hamburger */}
-          <button type="button" className="header-button" aria-label="Open navigation menu" onClick={() => setSidebarOpen((o) => !o)}>
-            <MenuIcon />
-          </button>
-
-          {/* Logo */}
-          <Link to="/" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--text-main)] text-sm font-bold text-[var(--bg-main)]" aria-label="BuildBoard+ home" title="BuildBoard+">
-            B
-          </Link>
-
-          {/* Page title */}
-          <Link to="/" className="hidden max-w-[180px] truncate text-base font-semibold sm:block">
-            {pageTitle}
-          </Link>
-
-          {/* Search bar (large screens) */}
-          <button type="button" className="github-search ml-auto hidden min-w-[260px] max-w-[520px] flex-1 items-center gap-2 rounded-md border border-[var(--border-main)] bg-[var(--bg-main)] px-3 py-2 text-left text-sm text-[var(--text-muted)] lg:flex" onClick={() => setPaletteOpen(true)}>
-            <SearchIcon />
-            <span className="truncate">Type <kbd>/</kbd> to search</span>
-          </button>
-
-          {/* Right-side actions */}
-          <div className="ml-auto flex min-w-0 items-center gap-2 lg:ml-0">
-            {/* Search (mobile) */}
-            <button type="button" className="header-button lg:hidden" aria-label="Search" title="Search" onClick={() => setPaletteOpen(true)}>
-              <SearchIcon />
+    <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] selection:bg-[var(--brand-primary)] selection:text-[#0a0a0f] flex flex-col">
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-40 h-16 border-b border-[var(--glass-border)] bg-[var(--bg-main)]/80 backdrop-blur-xl">
+        <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[var(--brand-primary)] to-transparent opacity-20" />
+        
+        <div className="flex h-full items-center justify-between px-4 lg:px-6">
+          
+          <div className="flex items-center gap-4">
+            <button 
+              type="button" 
+              className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 transition-colors" 
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu size={20} />
             </button>
-            {/* Agent Workspace → Organizations */}
-            <HeaderButton label="Agent workspace" dropdown className="hide-until-sm" as={Link} to="/organizations">
-              <CloudIcon />
+
+            <Link to="/" className="hidden lg:flex items-center gap-2 group">
+              <div className="grid h-8 w-8 place-items-center rounded bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-purple)] text-[#0a0a0f] font-display font-bold shadow-[0_0_10px_rgba(0,212,255,0.4)] group-hover:shadow-[0_0_20px_rgba(0,212,255,0.6)] transition-all">
+                BB
+              </div>
+              <span className="font-display font-bold tracking-wide hidden xl:block">
+                BUILDBOARD<span className="text-[var(--brand-primary)]">+</span>
+              </span>
+            </Link>
+            
+            <div className="h-5 w-px bg-[var(--glass-border)] hidden lg:block mx-2" />
+            
+            <h1 className="text-sm font-semibold text-[var(--text-main)] truncate max-w-[200px]">
+              {pageTitle}
+            </h1>
+          </div>
+
+          {/* Center Search (Large Screens) */}
+          <div className="hidden md:flex flex-1 max-w-xl mx-4">
+            <button 
+              type="button" 
+              className="w-full flex items-center justify-between gap-2 px-4 py-2 bg-[var(--bg-tertiary)] border border-[var(--glass-border)] hover:border-[var(--brand-primary)]/50 hover:shadow-[0_0_15px_rgba(0,212,255,0.1)] rounded-full text-sm text-[var(--text-muted)] transition-all group"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <div className="flex items-center gap-2">
+                <Search size={16} className="group-hover:text-[var(--brand-primary)] transition-colors" />
+                <span>Search nexus...</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <kbd className="hidden lg:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-[var(--bg-main)] border border-[var(--glass-border)] rounded text-[var(--text-muted)]">CTRL</kbd>
+                <kbd className="hidden lg:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-[var(--bg-main)] border border-[var(--glass-border)] rounded text-[var(--text-muted)]">K</kbd>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1 sm:gap-2">
+            <HeaderButton label="Search" className="md:hidden" onClick={() => setPaletteOpen(true)}>
+              <Search size={20} />
+            </HeaderButton>
+            
+            <HeaderButton label="New Node" className="hidden sm:flex" as={Link} to="/new">
+              <Plus size={20} />
             </HeaderButton>
 
-            <span className="mx-1 hidden h-6 w-px bg-[var(--border-main)] md:block" />
-
-            {/* Create new → /new */}
-            <HeaderButton label="Create new" dropdown as={Link} to="/new">
-              <PlusIcon />
+            <HeaderButton label="Issues" className="hidden lg:flex" as={Link} to="/issues">
+              <CircleDot size={20} />
             </HeaderButton>
 
-            {/* Issues → /issues */}
-            <HeaderButton label="Issues" className="hide-until-sm" as={Link} to="/issues">
-              <IssueIcon />
+            <HeaderButton label="Pull Requests" className="hidden lg:flex" as={Link} to="/pulls">
+              <GitPullRequest size={20} />
             </HeaderButton>
 
-            {/* Pull Requests → /pulls */}
-            <HeaderButton label="Pull requests" className="hide-until-sm" as={Link} to="/pulls">
-              <PullRequestIcon />
+            <HeaderButton label="Inbox" badge={hasUnread} as={Link} to="/notifications">
+              <Inbox size={20} />
             </HeaderButton>
 
-            {/* Projects → /organizations */}
-            <HeaderButton label="Projects" as={Link} to="/organizations" className="hide-until-md">
-              <ProjectIcon />
-            </HeaderButton>
+            <div className="h-5 w-px bg-[var(--glass-border)] hidden sm:block mx-1" />
 
-            {/* Repositories → /explore */}
-            <HeaderButton label="Repositories" as={Link} to="/explore" className="hide-until-md">
-              <BookIcon />
-            </HeaderButton>
-
-            {/* Inbox → /notifications */}
-            <HeaderButton label="Inbox" badge={hasUnread} className="hide-until-sm" as={Link} to="/notifications">
-              <InboxIcon />
-            </HeaderButton>
-
-            {/* Theme toggle */}
-            <HeaderButton label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme}>
-              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-            </HeaderButton>
-
-            {/* Profile avatar → dropdown (NOT logout) */}
-            <div className="relative">
+            <div className="relative" ref={profileRef}>
               <button
-                type="button"
-                className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--border-main)] bg-[var(--bg-main)] text-sm font-semibold ring-2 ring-transparent transition-all hover:ring-[var(--brand-primary)]"
-                onClick={() => setProfileOpen((o) => !o)}
-                aria-label="Account menu"
-                title={`${user?.username || 'Account'} — open profile menu`}
+                className="ml-1 relative h-8 w-8 rounded-full overflow-hidden border border-[var(--glass-border)] hover:border-[var(--brand-primary)] hover:shadow-[0_0_10px_rgba(0,212,255,0.3)] transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
+                onClick={() => setProfileOpen(!profileOpen)}
               >
-                <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-[var(--bg-subtle)] bg-[var(--brand-primary)]" />
-                {user?.avatar
-                  ? <img src={user.avatar} alt="" className="h-full w-full object-cover" />
-                  : <span>{(user?.username || 'B').slice(0,1).toUpperCase()}</span>
-                }
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-[var(--bg-tertiary)] flex items-center justify-center text-xs font-bold text-[var(--brand-primary)]">
+                    {(user?.username || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
               </button>
-              {profileOpen && (
-                <ProfileDropdown user={user} onClose={() => setProfileOpen(false)} onLogout={logout} />
-              )}
+
+              <AnimatePresence>
+                {profileOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-3 w-56 glass-panel border-t-[var(--brand-primary)] origin-top-right overflow-hidden shadow-2xl"
+                  >
+                    <div className="p-3 border-b border-[var(--glass-border)] bg-[var(--glass-highlight)]">
+                      <div className="font-semibold text-sm truncate">{user?.name || user?.username}</div>
+                      <div className="text-xs text-[var(--text-muted)] truncate">@{user?.username}</div>
+                    </div>
+                    
+                    <div className="p-1">
+                      <Link to="/profile" onClick={() => setProfileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-[var(--glass-highlight)] hover:text-[var(--brand-primary)] transition-colors">
+                        <User size={16} /> Profile
+                      </Link>
+                      <Link to="/explore" onClick={() => setProfileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-[var(--glass-highlight)] hover:text-[var(--brand-primary)] transition-colors">
+                        <Book size={16} /> Repositories
+                      </Link>
+                      <Link to="/organizations" onClick={() => setProfileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-[var(--glass-highlight)] hover:text-[var(--brand-primary)] transition-colors">
+                        <Layout size={16} /> Organizations
+                      </Link>
+                    </div>
+
+                    <div className="p-1 border-t border-[var(--glass-border)]">
+                      <button onClick={toggleTheme} className="w-full flex items-center justify-between px-3 py-2 text-sm rounded hover:bg-[var(--glass-highlight)] transition-colors">
+                        <span className="flex items-center gap-2">
+                          {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+                          Theme
+                        </span>
+                        <span className="text-xs font-mono text-[var(--text-muted)] uppercase">{theme}</span>
+                      </button>
+                      <button onClick={togglePerformanceMode} className="w-full flex items-center justify-between px-3 py-2 text-sm rounded hover:bg-[var(--glass-highlight)] transition-colors">
+                        <span className="flex items-center gap-2">
+                          <Zap size={16} className={performanceMode ? 'text-[var(--brand-primary)]' : ''} />
+                          Performance
+                        </span>
+                        <span className={twMerge("text-[10px] px-1.5 py-0.5 rounded font-mono uppercase border", performanceMode ? "bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] border-[var(--brand-primary)]/30" : "bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-[var(--glass-border)]")}>
+                          {performanceMode ? 'MAX' : 'ECO'}
+                        </span>
+                      </button>
+                      <Link to="/settings" onClick={() => setProfileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-[var(--glass-highlight)] transition-colors">
+                        <Settings size={16} /> Settings
+                      </Link>
+                    </div>
+
+                    <div className="p-1 border-t border-[var(--glass-border)]">
+                      <button onClick={() => { setProfileOpen(false); logout(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-[var(--brand-danger)]/10 text-[var(--brand-danger)] transition-colors">
+                        <LogOut size={16} /> Sign out
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -481,11 +523,21 @@ const AppLayout = () => {
         onOpenPalette={() => setPaletteOpen(true)}
       />
 
-      <div className="mx-auto grid max-w-screen-2xl grid-cols-1">
-        <main className="min-w-0 px-4 py-6 lg:px-8">
-          <Outlet />
-        </main>
-      </div>
+      {/* Main Content Area */}
+      <main className="flex-1 relative">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            variants={pageTransition}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="h-full"
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
+      </main>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
@@ -493,3 +545,4 @@ const AppLayout = () => {
 };
 
 export default AppLayout;
+

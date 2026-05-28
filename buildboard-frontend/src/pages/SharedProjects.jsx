@@ -1,336 +1,193 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { useNavigate } from 'react-router-dom'
-import Toast from '../components/Toast'
-import Notifications from '../components/Notifications'
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import { GlassCard, NeonButton, CyberInput, CyberBadge, CyberSkeleton } from '../components/ui';
+import { 
+  Share2, Search, ChevronLeft, Calendar, User as UserIcon, AlertCircle, FileText, ArrowRight
+} from 'lucide-react';
+import { pageVariants, listVariants, itemVariants } from '../utils/animations';
 
 function SharedProjects() {
-  const [projects, setProjects] = useState([])
-  const [filteredProjects, setFilteredProjects] = useState([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [toast, setToast] = useState(null)
-
-  const navigate = useNavigate()
-  const token = localStorage.getItem('token')
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
   
-  const getUserData = () => {
-    try {
-      const userData = localStorage.getItem('user')
-      return userData ? JSON.parse(userData) : null
-    } catch (err) {
-      console.error('Error parsing user data:', err)
-      return null
-    }
-  }
-  
-  const user = getUserData()
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  const showToast = (message, type = 'info') => {
-    setToast({ message, type })
-  }
-
-  // ✅ FIXED: Fetch shared projects with increased timeout
-  const fetchSharedProjects = async () => {
-    try {
-      setLoading(true)
-      setError('')
-      console.log('📥 Fetching shared projects...')
-      console.log('Token:', token?.substring(0, 20) + '...')
-      
-      // ✅ CORRECT ENDPOINT WITH TRAILING SLASH
+  const { data: projects = [], isLoading, error } = useQuery({
+    queryKey: ['sharedProjects'],
+    queryFn: async () => {
       const res = await axios.get('http://localhost:5000/api/projects/shared/', {
-        headers: { 
-          Authorization: token,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000  // ✅ INCREASED TIMEOUT
-      })
-      
-      console.log('✅ Shared projects fetched:', res.data.length)
-      console.log('📦 Data:', res.data)
-      setProjects(res.data)
-      setError('')
-    } catch (err) {
-      console.error('❌ Error fetching shared projects:', err.message)
-      console.error('❌ Error details:', err.response?.data)
-      setError(err.response?.data?.message || 'Failed to load shared projects')
-      showToast(err.response?.data?.message || 'Failed to load shared projects', 'error')
-      setProjects([])
-    } finally {
-      setLoading(false)
-    }
+        headers: { Authorization: token }
+      });
+      return res.data;
+    },
+    enabled: !!token
+  });
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter(p =>
+      p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [projects, searchQuery]);
+
+  if (!token || !user?.id) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] p-8">
+        <GlassCard glowColor="var(--brand-danger)" className="p-12 text-center max-w-md border-[var(--brand-danger)]/50 bg-[var(--brand-danger)]/5">
+          <AlertCircle size={48} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <h2 className="text-xl font-display font-bold text-white mb-2">ACCESS_DENIED</h2>
+          <p className="text-sm font-mono text-[var(--text-muted)] mb-6">Authentication required to view shared projects.</p>
+          <NeonButton variant="ghost" onClick={() => navigate('/login')}>AUTHENTICATE</NeonButton>
+        </GlassCard>
+      </div>
+    );
   }
 
-  // ✅ FIXED: Check auth on mount and fetch projects - with cleanup
-  useEffect(() => {
-    console.log('📍 SharedProjects mounted')
-    console.log('Token:', token?.substring(0, 20) + '...')
-    console.log('User:', user?.name)
-
-    if (!token || !user) {
-      console.log('❌ No token or user, redirecting to login')
-      navigate('/')
-      return
-    }
-
-    fetchSharedProjects()
-
-    // ✅ CLEANUP function
-    return () => {
-      console.log('🧹 SharedProjects component unmounting - cleanup')
-    }
-  }, []) // ✅ EMPTY dependency array - fetch only once on mount
-
-  // ✅ Apply search filter
-  useEffect(() => {
-    const filtered = projects.filter(p =>
-      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()))
-    )
-    setFilteredProjects(filtered)
-  }, [projects, searchQuery])
-
-  const handleLogout = () => {
-    localStorage.clear()
-    navigate('/')
+  if (isLoading) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center gap-4 mb-8">
+          <CyberSkeleton className="w-10 h-10 rounded-lg" />
+          <CyberSkeleton className="w-64 h-8" />
+        </div>
+        <CyberSkeleton className="w-full max-w-md h-12 mb-8 rounded-lg" />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map(i => <CyberSkeleton key={i} className="h-48 rounded-xl" />)}
+        </div>
+      </div>
+    );
   }
 
-  if (!user) {
-    return null
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] p-8">
+        <GlassCard glowColor="var(--brand-danger)" className="p-12 text-center max-w-md border-[var(--brand-danger)]/50 bg-[var(--brand-danger)]/5">
+          <AlertCircle size={48} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <h2 className="text-xl font-display font-bold text-white mb-2">SYSTEM_ERROR</h2>
+          <p className="text-sm font-mono text-[var(--text-muted)] mb-6">Failed to retrieve shared projects matrix.</p>
+          <NeonButton variant="primary" onClick={() => navigate('/projects')}>RETURN</NeonButton>
+        </GlassCard>
+      </div>
+    );
   }
 
   return (
-    <div style={styles.container}>
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-
-      <div style={styles.navbar}>
-        <h2 style={styles.logo}>BuildBoard+</h2>
-        <div style={styles.navRight}>
+    <motion.div 
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="max-w-7xl mx-auto p-4 md:p-8 space-y-8"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--glass-border)] pb-6">
+        <div className="flex items-center gap-4">
           <button 
-            style={styles.analyticsBtn} 
-            onClick={() => navigate('/analytics')}
-            title="View Analytics"
+            onClick={() => navigate('/projects')}
+            className="w-10 h-10 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:border-[var(--brand-primary)] transition-all group shrink-0"
           >
-            📊 Analytics
+            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           </button>
-          <Notifications />
-          <span style={styles.username}>👋 {user?.name}</span>
-          <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
-        </div>
-      </div>
-
-      <div style={styles.body}>
-        <div style={styles.topRow}>
-          <h3 style={styles.heading}>📤 Projects Shared with Me</h3>
-          <div style={styles.topActions}>
-            <button 
-              style={styles.backBtn}
-              onClick={() => navigate('/projects')}
-              title="Back to my projects"
-            >
-              ← Back to My Projects
-            </button>
-          </div>
-        </div>
-
-        <div style={styles.searchBox}>
-          <input
-            style={styles.searchInput}
-            type="text"
-            placeholder="🔍 Search shared projects..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        {/* ✅ Error display */}
-        {error && (
-          <div style={styles.errorBox}>
-            <p style={styles.errorText}>{error}</p>
-          </div>
-        )}
-
-        {/* ✅ Loading state */}
-        {loading ? (
-          <div style={styles.empty}>
-            <p>⏳ Loading shared projects...</p>
-          </div>
-        ) : filteredProjects.length === 0 ? (
-          <div style={styles.empty}>
-            <p>
-              {projects.length === 0
-                ? '📭 No projects shared with you yet!'
-                : '🔍 No shared projects match your search.'}
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-bold flex items-center gap-3 text-white">
+              <Share2 className="text-[var(--brand-primary)]" />
+              SHARED_WITH_ME
+            </h1>
+            <p className="text-sm font-mono text-[var(--text-muted)] mt-1">
+              Projects delegated to your clearance level.
             </p>
           </div>
+        </div>
+      </div>
+
+      <div className="max-w-md">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--brand-primary)]" size={18} />
+          <input
+            type="text"
+            placeholder="SCAN SHARED PROJECTS..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg py-3 pl-10 pr-4 text-sm font-mono text-white focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]/50 outline-none transition-all placeholder-[var(--text-muted)]"
+          />
+        </div>
+      </div>
+
+      <motion.div variants={listVariants} initial="hidden" animate="visible">
+        {filteredProjects.length === 0 ? (
+          <GlassCard className="p-16 text-center flex flex-col items-center justify-center border-dashed">
+            <Share2 size={64} className="text-[var(--text-muted)] opacity-20 mb-6" />
+            <h3 className="text-2xl font-display font-bold mb-2">NO_MATCHES_FOUND</h3>
+            <p className="text-sm font-mono text-[var(--text-muted)] mb-8 max-w-md">
+              {projects.length === 0 
+                ? "No projects have been shared with your operative account." 
+                : "No shared projects match your current scan parameters."}
+            </p>
+          </GlassCard>
         ) : (
-          <div style={styles.grid}>
-            {filteredProjects.map((project) => (
-              <div key={project._id} style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <h4 style={styles.cardTitle}>{project.title}</h4>
-                  <span style={styles.badge}>👤 {project.createdBy?.name}</span>
-                </div>
-                <p style={styles.cardDesc}>
-                  {project.description || '📝 No description'}
-                </p>
-                <p style={styles.cardDate}>
-                  📅 {new Date(project.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </p>
-                <div style={styles.btnRow}>
-                  <button
-                    style={styles.viewBtn}
-                    onClick={() => {
-                      console.log('🔗 Navigating to versions:', project._id)
-                      navigate(`/versions/${project._id}`)
-                    }}
-                  >
-                    View Versions →
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <AnimatePresence>
+              {filteredProjects.map((project) => (
+                <motion.div 
+                  key={project._id} 
+                  variants={itemVariants}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <GlassCard className="h-full flex flex-col p-0 overflow-hidden group hover:border-[var(--brand-primary)]/50 transition-colors">
+                    <div className="p-5 border-b border-[var(--glass-border)] bg-black/40 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-[var(--brand-primary)]/5 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2" />
+                      
+                      <div className="flex justify-between items-start mb-2 relative z-10">
+                        <h3 className="font-display font-bold text-lg text-white group-hover:text-[var(--brand-primary)] transition-colors truncate">
+                          {project.title}
+                        </h3>
+                        <CyberBadge variant="primary" size="sm" className="font-mono ml-2 shrink-0">SHARED</CyberBadge>
+                      </div>
+                      
+                      <div className="flex flex-col gap-1.5 mt-4 text-xs font-mono text-[var(--text-muted)] relative z-10">
+                        <div className="flex items-center gap-2">
+                          <UserIcon size={14} className="text-[var(--brand-warning)] shrink-0" />
+                          <span className="truncate">{project.createdBy?.name || 'UNKNOWN_OWNER'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar size={14} className="text-[var(--brand-purple)] shrink-0" />
+                          <span>{new Date(project.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-5 flex-1">
+                      <h4 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">Project Brief</h4>
+                      <p className="text-sm text-[var(--text-main)] line-clamp-3 leading-relaxed">
+                        {project.description || 'No project description provided.'}
+                      </p>
+                    </div>
+
+                    <div className="p-4 border-t border-[var(--glass-border)] bg-black/20 mt-auto">
+                      <NeonButton 
+                        variant="primary" 
+                        className="w-full py-2 text-xs flex justify-center items-center gap-2"
+                        onClick={() => navigate(`/versions/${project._id}`)}
+                      >
+                        <FileText size={14} /> ACCESS_VERSIONS <ArrowRight size={14} />
+                      </NeonButton>
+                    </div>
+                  </GlassCard>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         )}
-      </div>
-    </div>
-  )
+      </motion.div>
+    </motion.div>
+  );
 }
 
-const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#f0f2f5' },
-  navbar: {
-    display: 'flex', justifyContent: 'space-between',
-    alignItems: 'center', padding: '16px 32px',
-    backgroundColor: '#4f46e5', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-  },
-  logo: { margin: 0, color: '#fff', fontSize: '24px', fontWeight: '700' },
-  navRight: { display: 'flex', alignItems: 'center', gap: '16px' },
-  username: { color: '#fff', fontSize: '14px', fontWeight: '500' },
-  analyticsBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#10b981',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  logoutBtn: {
-    padding: '8px 16px', backgroundColor: '#fff',
-    color: '#4f46e5', border: 'none',
-    borderRadius: '6px', cursor: 'pointer', fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  body: { padding: '32px', maxWidth: '1400px', margin: '0 auto' },
-  topRow: {
-    display: 'flex', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: '24px',
-    flexWrap: 'wrap', gap: '16px'
-  },
-  topActions: { display: 'flex', gap: '12px' },
-  heading: { margin: 0, fontSize: '28px', color: '#333', fontWeight: '700' },
-  backBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#6b7280',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  },
-  searchBox: { marginBottom: '24px' },
-  searchInput: {
-    width: '100%',
-    maxWidth: '400px',
-    padding: '10px 14px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '14px',
-    boxSizing: 'border-box',
-    fontFamily: 'inherit'
-  },
-  errorBox: {
-    padding: '12px 20px',
-    backgroundColor: '#fee',
-    borderLeft: '4px solid #ef4444',
-    marginBottom: '20px',
-    borderRadius: '6px'
-  },
-  errorText: {
-    margin: 0,
-    color: '#c33',
-    fontSize: '14px',
-    fontWeight: '500'
-  },
-  empty: {
-    textAlign: 'center', padding: '80px 40px',
-    backgroundColor: '#fff', borderRadius: '12px',
-    color: '#888', fontSize: '18px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-    gap: '20px'
-  },
-  card: {
-    backgroundColor: '#fff', padding: '24px',
-    borderRadius: '12px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    borderLeft: '4px solid #10b981',
-    transition: 'all 0.2s',
-    cursor: 'default'
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px',
-    gap: '12px'
-  },
-  cardTitle: { margin: 0, color: '#333', fontSize: '18px', fontWeight: '600' },
-  badge: {
-    display: 'inline-block',
-    padding: '4px 10px',
-    backgroundColor: '#dbeafe',
-    color: '#0284c7',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: '600',
-    whiteSpace: 'nowrap'
-  },
-  cardDesc: { color: '#666', fontSize: '14px', margin: '0 0 10px', lineHeight: '1.5' },
-  cardDate: { color: '#999', fontSize: '12px', margin: '0 0 12px' },
-  btnRow: { display: 'flex', gap: '10px', marginTop: '16px' },
-  viewBtn: {
-    flex: 1,
-    padding: '8px 12px',
-    backgroundColor: '#10b981',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    transition: 'all 0.2s'
-  }
-}
-
-export default SharedProjects
+export default SharedProjects;

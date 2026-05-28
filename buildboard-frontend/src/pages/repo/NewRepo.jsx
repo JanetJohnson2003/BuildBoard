@@ -3,11 +3,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
+import { GlassCard, NeonButton, CyberInput } from '../../components/ui';
+import { pageVariants, itemVariants, listVariants } from '../../utils/animations';
+import { Database, Shield, ShieldAlert, FileText, AlertCircle } from 'lucide-react';
 
 const newRepoSchema = z.object({
-  name: z.string().min(1, 'Repository name is required').regex(/^[a-zA-Z0-9-_]+$/, 'Name can only contain alphanumeric characters, hyphens, and underscores'),
+  name: z.string().min(1, 'Repository designation is required').regex(/^[a-zA-Z0-9-_]+$/, 'Designation can only contain alphanumeric characters, hyphens, and underscores'),
   description: z.string().optional(),
   visibility: z.enum(['public', 'private']),
   initReadme: z.boolean().default(true),
@@ -21,6 +25,7 @@ const NewRepo = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(newRepoSchema),
@@ -30,6 +35,9 @@ const NewRepo = () => {
     }
   });
 
+  const visibilityValue = watch('visibility');
+  const nameValue = watch('name');
+
   const onSubmit = async (data) => {
     try {
       setErrorMsg('');
@@ -37,102 +45,194 @@ const NewRepo = () => {
         name: data.name,
         description: data.description,
         visibility: data.visibility,
-        readme: data.initReadme ? `# ${data.name}\n\nA new BuildBoard+ repository.` : '',
+        readme: data.initReadme ? `# ${data.name}\n\nOperational guidelines for sector ${data.name}.` : '',
       });
-      navigate(`/${user.username}/${response.data.repository.name}`);
+      navigate(`/${user.username}/${response.data.slug}`);
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Failed to create repository.');
+      setErrorMsg(err.response?.data?.message || 'Failed to initialize sector.');
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
-      <div className="border-b border-[var(--border-main)] pb-4 mb-6">
-        <h1 className="text-2xl font-semibold">Create a new repository</h1>
-        <p className="text-[var(--text-muted)] text-sm mt-1">A repository contains all project files, including the revision history.</p>
+    <motion.div 
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="max-w-4xl mx-auto py-8 px-4"
+    >
+      <div className="border-b border-[var(--glass-border)] pb-6 mb-8 flex items-end justify-between">
+        <div>
+          <h1 className="text-3xl font-display font-bold flex items-center gap-3 text-white">
+            <Database className="text-[var(--brand-primary)]" size={32} />
+            INITIALIZE_SECTOR
+          </h1>
+          <p className="text-sm font-mono text-[var(--text-muted)] mt-2">
+            Establish a new repository for your project files and revision history.
+          </p>
+        </div>
       </div>
 
       {errorMsg && (
-        <div className="mb-4 bg-[var(--brand-danger)]/10 border border-[var(--brand-danger)]/20 text-[var(--brand-danger)] px-4 py-3 rounded relative" role="alert">
-          <span className="block sm:inline text-sm">{errorMsg}</span>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 p-4 bg-[var(--brand-danger)]/10 border border-[var(--brand-danger)]/50 rounded-lg text-sm font-mono text-[var(--brand-danger)] flex items-start gap-3"
+        >
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <span>{errorMsg}</span>
+        </motion.div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div>
-          <label className="block font-semibold mb-2 text-sm">Repository name *</label>
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-medium">{user?.username}</span>
-            <span className="text-lg text-[var(--text-muted)]">/</span>
-            <input
-              type="text"
-              {...register('name')}
-              className={`input-field max-w-sm ${errors.name ? 'border-[var(--brand-danger)] focus:ring-[var(--brand-danger)]' : ''}`}
-            />
-          </div>
-          {errors.name && <p className="mt-1 text-sm text-[var(--brand-danger)]">{errors.name.message}</p>}
-          <p className="text-xs text-[var(--text-muted)] mt-2">
-            Great repository names are short and memorable.
-          </p>
-        </div>
-
-        <div>
-          <label className="block font-semibold mb-2 text-sm">Description <span className="text-[var(--text-muted)] font-normal">(optional)</span></label>
-          <input
-            type="text"
-            {...register('description')}
-            className="input-field max-w-2xl"
-          />
-        </div>
-
-        <div className="border-t border-[var(--border-main)] pt-6">
-          <label className="block font-semibold mb-3 text-sm">Visibility</label>
-          <div className="space-y-3">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="radio" value="public" {...register('visibility')} className="mt-1" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <svg className="text-[var(--text-muted)]" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
-                  <span className="font-semibold text-sm">Public</span>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <motion.div variants={listVariants} initial="hidden" animate="visible" className="space-y-8">
+          
+          <motion.div variants={itemVariants}>
+            <GlassCard className="p-6 md:p-8 border-t-2 border-t-[var(--brand-primary)]">
+              <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--brand-primary)] mb-6">1. Core Metadata</h2>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-mono text-[var(--text-muted)] uppercase mb-3">Sector Designation (Name) *</label>
+                  <div className="flex items-center gap-3 bg-[var(--bg-tertiary)]/50 p-2 rounded-lg border border-[var(--glass-border)] focus-within:border-[var(--brand-primary)] focus-within:ring-1 focus-within:ring-[var(--brand-primary)]/50 transition-all">
+                    <span className="text-base font-display font-bold text-white px-3 shrink-0 flex items-center gap-2">
+                      {user?.username} <span className="text-[var(--brand-primary)]">/</span>
+                    </span>
+                    <input
+                      type="text"
+                      {...register('name')}
+                      placeholder="e.g. project-apollo"
+                      className="w-full bg-transparent border-none outline-none text-white font-mono text-base placeholder-[var(--text-muted)] py-1"
+                      autoFocus
+                    />
+                  </div>
+                  {errors.name && (
+                    <p className="mt-2 text-xs font-mono text-[var(--brand-danger)] flex items-center gap-1">
+                      <AlertCircle size={12} /> {errors.name.message}
+                    </p>
+                  )}
+                  {nameValue && !errors.name && (
+                    <p className="mt-2 text-xs font-mono text-[var(--brand-success)]">
+                      Directory /<span className="text-white">{user?.username}/{nameValue}</span> will be created.
+                    </p>
+                  )}
                 </div>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">Anyone on the internet can see this repository. You choose who can commit.</p>
-              </div>
-            </label>
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="radio" value="private" {...register('visibility')} className="mt-1" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <svg className="text-[var(--text-muted)]" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                  <span className="font-semibold text-sm">Private</span>
+
+                <div>
+                  <label className="block text-xs font-mono text-[var(--text-muted)] uppercase mb-3">Operational Brief (Description)</label>
+                  <CyberInput
+                    {...register('description')}
+                    placeholder="Short description of this sector's purpose (optional)"
+                  />
                 </div>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">You choose who can see and commit to this repository.</p>
               </div>
-            </label>
-          </div>
-        </div>
+            </GlassCard>
+          </motion.div>
 
-        <div className="border-t border-[var(--border-main)] pt-6">
-          <label className="block font-semibold mb-3 text-sm">Initialize this repository with:</label>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" {...register('initReadme')} className="mt-1" />
-            <div>
-              <span className="font-semibold text-sm">Add a README file</span>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">This is where you can write a long description for your project.</p>
-            </div>
-          </label>
-        </div>
+          <motion.div variants={itemVariants}>
+            <GlassCard className="p-6 md:p-8 border-t-2 border-t-[var(--brand-purple)]">
+              <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--brand-purple)] mb-6">2. Access Controls</h2>
+              
+              <div className="space-y-4">
+                <label 
+                  className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${
+                    visibilityValue === 'public' 
+                      ? 'bg-[var(--brand-success)]/10 border-[var(--brand-success)]/50 shadow-[0_0_15px_rgba(16,185,129,0.1)]' 
+                      : 'bg-[var(--bg-tertiary)] border-[var(--glass-border)] hover:border-[var(--brand-success)]/30'
+                  }`}
+                >
+                  <input type="radio" value="public" {...register('visibility')} className="mt-1 sr-only" />
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                    visibilityValue === 'public' ? 'border-[var(--brand-success)]' : 'border-[var(--text-muted)]'
+                  }`}>
+                    {visibilityValue === 'public' && <div className="w-2.5 h-2.5 rounded-full bg-[var(--brand-success)]" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Shield className={visibilityValue === 'public' ? 'text-[var(--brand-success)]' : 'text-[var(--text-muted)]'} size={18} />
+                      <span className={`font-display font-bold ${visibilityValue === 'public' ? 'text-white' : 'text-[var(--text-main)]'}`}>PUBLIC SECTOR</span>
+                    </div>
+                    <p className="text-xs font-mono text-[var(--text-muted)] leading-relaxed">
+                      Anyone on the external network can see this repository. You control commit privileges.
+                    </p>
+                  </div>
+                </label>
 
-        <div className="border-t border-[var(--border-main)] pt-6 flex justify-end">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="btn-primary py-2 px-6 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Creating...' : 'Create repository'}
-          </button>
-        </div>
+                <label 
+                  className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${
+                    visibilityValue === 'private' 
+                      ? 'bg-[var(--brand-danger)]/10 border-[var(--brand-danger)]/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' 
+                      : 'bg-[var(--bg-tertiary)] border-[var(--glass-border)] hover:border-[var(--brand-danger)]/30'
+                  }`}
+                >
+                  <input type="radio" value="private" {...register('visibility')} className="mt-1 sr-only" />
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                    visibilityValue === 'private' ? 'border-[var(--brand-danger)]' : 'border-[var(--text-muted)]'
+                  }`}>
+                    {visibilityValue === 'private' && <div className="w-2.5 h-2.5 rounded-full bg-[var(--brand-danger)]" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldAlert className={visibilityValue === 'private' ? 'text-[var(--brand-danger)]' : 'text-[var(--text-muted)]'} size={18} />
+                      <span className={`font-display font-bold ${visibilityValue === 'private' ? 'text-white' : 'text-[var(--text-main)]'}`}>PRIVATE SECTOR</span>
+                    </div>
+                    <p className="text-xs font-mono text-[var(--text-muted)] leading-relaxed">
+                      Strict access control. Only authorized operatives can view or commit to this repository.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </GlassCard>
+          </motion.div>
+
+          <motion.div variants={itemVariants}>
+            <GlassCard className="p-6 md:p-8 border-t-2 border-t-[var(--brand-warning)]">
+              <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--brand-warning)] mb-6">3. Initialization Parameters</h2>
+              
+              <label className="flex items-start gap-4 p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)] hover:border-[var(--brand-warning)]/30 cursor-pointer transition-all group">
+                <div className="relative flex items-center justify-center mt-1">
+                  <input 
+                    type="checkbox" 
+                    {...register('initReadme')} 
+                    className="w-5 h-5 opacity-0 absolute cursor-pointer z-10" 
+                  />
+                  <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                    watch('initReadme') ? 'bg-[var(--brand-warning)] border-[var(--brand-warning)]' : 'border-[var(--text-muted)] group-hover:border-[var(--brand-warning)]/50'
+                  }`}>
+                    {watch('initReadme') && (
+                      <svg viewBox="0 0 14 14" fill="none" className="w-3.5 h-3.5 text-black">
+                        <path d="M3 8L6 11L11 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileText className={watch('initReadme') ? 'text-[var(--brand-warning)]' : 'text-[var(--text-muted)]'} size={18} />
+                    <span className={`font-display font-bold ${watch('initReadme') ? 'text-white' : 'text-[var(--text-main)]'}`}>GENERATE README.MD</span>
+                  </div>
+                  <p className="text-xs font-mono text-[var(--text-muted)] leading-relaxed">
+                    Automatically create a README file containing project specifications.
+                  </p>
+                </div>
+              </label>
+            </GlassCard>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="flex justify-end pt-4">
+            <NeonButton
+              variant="primary"
+              type="submit"
+              disabled={isSubmitting}
+              className={`w-full md:w-auto min-w-[240px] ${isSubmitting ? 'opacity-50' : ''}`}
+            >
+              {isSubmitting ? 'INITIALIZING_SECTOR...' : 'INITIALIZE_SECTOR'}
+            </NeonButton>
+          </motion.div>
+          
+        </motion.div>
       </form>
-    </div>
+    </motion.div>
   );
 };
 

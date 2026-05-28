@@ -1,83 +1,52 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { useParams, useNavigate } from 'react-router-dom'
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import { GlassCard, NeonButton, CyberBadge, CyberSkeleton } from '../components/ui';
+import { 
+  MessageSquare, Trash2, CheckCircle2, Clock, Plus, X, 
+  ChevronLeft, User as UserIcon, Calendar, AlertCircle, RefreshCw
+} from 'lucide-react';
+import { pageVariants, listVariants, itemVariants } from '../utils/animations';
 
 function Feedback() {
-  const { versionId } = useParams()
-  const navigate = useNavigate()
+  const { versionId } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [feedback, setFeedback] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     comment: '',
     status: 'pending'
-  })
+  });
 
-  const token = localStorage.getItem('token')
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  // ✅ Fetch feedback on mount
-  useEffect(() => {
-    if (!versionId) {
-      setError('No version ID provided')
-      setLoading(false)
-      return
-    }
-
-    fetchFeedback()
-  }, [versionId])
-
-  // ✅ Fetch all feedback for this version
-  const fetchFeedback = async () => {
-    try {
-      console.log('📥 Fetching feedback for version:', versionId)
-      setLoading(true)
-      setError(null)
-
+  // Fetch Feedback
+  const { data: feedbackList, isLoading, error } = useQuery({
+    queryKey: ['feedback', versionId],
+    queryFn: async () => {
       const res = await axios.get(
         `http://localhost:5000/api/feedback/version/${versionId}`,
         {
-          headers: {
-            Authorization: token,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000
+          headers: { Authorization: token }
         }
-      )
+      );
+      return res.data;
+    },
+    enabled: !!versionId
+  });
 
-      console.log('✅ Feedback fetched:', res.data.length)
-      setFeedback(res.data)
-      setLoading(false)
-    } catch (err) {
-      console.error('❌ Error fetching feedback:', err.message)
-      setError(`Failed to load feedback: ${err.message}`)
-      setLoading(false)
-    }
-  }
-
-  // ✅ Handle form input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-  // ✅ Handle submit feedback
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-
-    if (!formData.comment.trim()) {
-      alert('Please enter a comment')
-      return
-    }
-
-    try {
-      console.log('💬 Submitting feedback...')
-
+  // Submit Feedback Mutation
+  const submitMutation = useMutation({
+    mutationFn: async () => {
       const res = await axios.post(
         `http://localhost:5000/api/feedback`,
         {
@@ -91,483 +60,280 @@ function Feedback() {
             'Content-Type': 'application/json'
           }
         }
-      )
-
-      console.log('✅ Feedback submitted:', res.data)
-      alert('✅ Feedback submitted successfully!')
-
-      // Reset form
-      setFormData({
-        comment: '',
-        status: 'pending'
-      })
-      setShowForm(false)
-
-      // Refresh feedback list
-      fetchFeedback()
-    } catch (err) {
-      console.error('❌ Submit error:', err.message)
-      alert(`Submit failed: ${err.response?.data?.message || err.message}`)
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['feedback', versionId]);
+      setFormData({ comment: '', status: 'pending' });
+      setShowForm(false);
     }
-  }
+  });
 
-  // ✅ Handle delete feedback
-  const handleDelete = async (feedbackId) => {
-    if (!window.confirm('Are you sure you want to delete this feedback?')) {
-      return
+  // Delete Feedback Mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (feedbackId) => {
+      await axios.delete(`http://localhost:5000/api/feedback/${feedbackId}`, {
+        headers: { Authorization: token }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['feedback', versionId]);
     }
+  });
 
-    try {
-      console.log('🗑️ Deleting feedback:', feedbackId)
-
-      await axios.delete(
-        `http://localhost:5000/api/feedback/${feedbackId}`,
-        {
-          headers: {
-            Authorization: token
-          }
-        }
-      )
-
-      console.log('✅ Feedback deleted')
-      alert('✅ Feedback deleted successfully!')
-      fetchFeedback()
-    } catch (err) {
-      console.error('❌ Delete error:', err.message)
-      alert(`Delete failed: ${err.message}`)
-    }
-  }
-
-  // ✅ Handle mark as resolved
-  const handleResolve = async (feedbackId) => {
-    try {
-      console.log('✅ Resolving feedback:', feedbackId)
-
+  // Resolve Feedback Mutation
+  const resolveMutation = useMutation({
+    mutationFn: async (feedbackId) => {
       await axios.put(
         `http://localhost:5000/api/feedback/${feedbackId}`,
         { status: 'resolved' },
         {
-          headers: {
-            Authorization: token
-          }
+          headers: { Authorization: token }
         }
-      )
-
-      console.log('✅ Feedback resolved')
-      fetchFeedback()
-    } catch (err) {
-      console.error('❌ Resolve error:', err.message)
-      alert(`Failed to resolve: ${err.message}`)
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['feedback', versionId]);
     }
-  }
+  });
 
-  if (loading) {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.comment.trim()) return;
+    submitMutation.mutate();
+  };
+
+  const handleDelete = (feedbackId) => {
+    if (window.confirm('Delete this feedback?')) {
+      deleteMutation.mutate(feedbackId);
+    }
+  };
+
+  const handleResolve = (feedbackId) => {
+    resolveMutation.mutate(feedbackId);
+  };
+
+  if (isLoading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
-          <button style={styles.backBtn} onClick={() => navigate(-1)}>
-            ← Back
-          </button>
+      <div className="p-8 max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center gap-4 mb-8">
+          <CyberSkeleton className="w-10 h-10 rounded-lg" />
+          <CyberSkeleton className="w-64 h-8" />
         </div>
-        <div style={styles.body}>
-          <p style={{ textAlign: 'center', marginTop: '40px' }}>⏳ Loading feedback...</p>
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => <CyberSkeleton key={i} className="h-32 rounded-xl" />)}
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
     return (
-      <div style={styles.container}>
-        <div style={styles.navbar}>
-          <h2 style={styles.logo}>BuildBoard+</h2>
-          <button style={styles.backBtn} onClick={() => navigate(-1)}>
-            ← Back
-          </button>
-        </div>
-        <div style={styles.body}>
-          <div style={styles.errorBox}>
-            <p>❌ {error}</p>
-            <button style={styles.retryBtn} onClick={fetchFeedback}>
-              🔄 Retry
-            </button>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[60vh] p-8">
+        <GlassCard glowColor="var(--brand-danger)" className="p-12 text-center max-w-md border-[var(--brand-danger)]/50 bg-[var(--brand-danger)]/5">
+          <AlertCircle size={48} className="text-[var(--brand-danger)] mx-auto mb-4" />
+          <h2 className="text-xl font-display font-bold text-white mb-2">SYSTEM_ERROR</h2>
+          <p className="text-sm font-mono text-[var(--text-muted)] mb-6">Failed to access feedback records.</p>
+          <NeonButton variant="ghost" onClick={() => navigate(-1)}>RETURN</NeonButton>
+        </GlassCard>
       </div>
-    )
+    );
   }
 
   return (
-    <div style={styles.container}>
-      {/* ✅ NAVBAR */}
-      <div style={styles.navbar}>
-        <h2 style={styles.logo}>BuildBoard+</h2>
-        <div style={styles.navRight}>
-          <span style={styles.username}>👋 {user?.name}</span>
+    <motion.div 
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="max-w-5xl mx-auto p-4 md:p-8 space-y-8"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--glass-border)] pb-6">
+        <div className="flex items-center gap-4">
           <button 
-            style={styles.backBtn} 
             onClick={() => navigate(-1)}
+            className="w-10 h-10 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:border-[var(--brand-primary)] transition-all group"
           >
-            ← Back
+            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           </button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-bold flex items-center gap-3 text-white">
+              <MessageSquare className="text-[var(--brand-purple)]" />
+              BUILD_DIAGNOSTICS
+            </h1>
+            <p className="text-sm font-mono text-[var(--text-muted)] mt-1">
+              Analyzing feedback for Build ID: <span className="text-[var(--brand-purple)] truncate max-w-[200px] inline-block align-bottom">{versionId}</span>
+            </p>
+          </div>
         </div>
+        
+        <NeonButton 
+          variant={showForm ? 'ghost' : 'purple'}
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2"
+        >
+          {showForm ? <><X size={16} /> ABORT_ENTRY</> : <><Plus size={16} /> NEW_DIAGNOSTIC</>}
+        </NeonButton>
       </div>
 
-      {/* ✅ BODY */}
-      <div style={styles.body}>
-        <div style={styles.topRow}>
-          <h1 style={styles.title}>💬 Feedback</h1>
-          <button
-            style={styles.addBtn}
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? '✕ Cancel' : '➕ Add Feedback'}
-          </button>
-        </div>
-
-        {/* ✅ ADD FEEDBACK FORM */}
+      <AnimatePresence>
         {showForm && (
-          <div style={styles.form}>
-            <h3 style={styles.formTitle}>💬 Add New Feedback</h3>
-            
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Comment *</label>
-              <textarea
-                name="comment"
-                placeholder="Enter your feedback..."
-                value={formData.comment}
-                onChange={handleInputChange}
-                style={styles.textarea}
-                rows="4"
-                autoFocus
-              />
-            </div>
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <GlassCard className="p-6 md:p-8 border-t-[var(--brand-purple)] shadow-[0_10px_30px_rgba(157,78,221,0.1)] mb-8">
+              <h2 className="text-xl font-display font-bold mb-6 flex items-center gap-2">
+                <MessageSquare className="text-[var(--brand-purple)]" size={20} />
+                INITIALIZE_FEEDBACK
+              </h2>
+              
+              <div className="mb-6 space-y-2">
+                <label className="text-xs font-mono text-[var(--text-muted)] pl-1 block uppercase tracking-wider">
+                  Diagnostic Report
+                </label>
+                <textarea
+                  name="comment"
+                  value={formData.comment}
+                  onChange={handleInputChange}
+                  placeholder="Enter detailed feedback, bug reports, or feature requests for this build..."
+                  className="w-full bg-[var(--bg-main)]/50 border border-[var(--glass-border)] rounded-lg p-4 text-sm font-mono text-[#c9d1d9] min-h-[120px] focus:border-[var(--brand-purple)] focus:ring-1 focus:ring-[var(--brand-purple)]/50 outline-none transition-all resize-y cyber-scrollbar leading-relaxed"
+                  autoFocus
+                />
+              </div>
 
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Status</label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleInputChange}
-                style={styles.select}
-              >
-                <option value="pending">⏳ Pending</option>
-                <option value="in_progress">🔄 In Progress</option>
-                <option value="resolved">✅ Resolved</option>
-              </select>
-            </div>
-
-            <div style={styles.formActions}>
-              <button
-                style={styles.submitBtn}
-                onClick={handleSubmit}
-              >
-                ✓ Submit Feedback
-              </button>
-              <button
-                style={styles.cancelBtn}
-                onClick={() => {
-                  setShowForm(false)
-                  setFormData({
-                    comment: '',
-                    status: 'pending'
-                  })
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ FEEDBACK LIST */}
-        <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>📋 All Feedback ({feedback.length})</h2>
-
-          {feedback.length === 0 ? (
-            <div style={styles.empty}>
-              <p>📭 No feedback yet. Click "➕ Add Feedback" to start!</p>
-            </div>
-          ) : (
-            <div style={styles.list}>
-              {feedback.map((item) => (
-                <div key={item._id} style={styles.feedbackItem}>
-                  <div style={styles.feedbackHeader}>
-                    <div>
-                      <p style={styles.feedbackAuthor}>
-                        👤 {item.reviewerId?.name || 'Anonymous'}
-                      </p>
-                      <p style={styles.feedbackDate}>
-                        📅 {new Date(item.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <span style={{
-                      ...styles.statusBadge,
-                      ...(item.status === 'resolved' ? styles.resolvedBadge :
-                         item.status === 'in_progress' ? styles.progressBadge :
-                         styles.pendingBadge)
-                    }}>
-                      {item.status === 'resolved' ? '✅ Resolved' :
-                       item.status === 'in_progress' ? '🔄 In Progress' :
-                       '⏳ Pending'}
-                    </span>
-                  </div>
-
-                  <p style={styles.feedbackComment}>
-                    {item.comment}
-                  </p>
-
-                  <div style={styles.feedbackActions}>
-                    {item.status !== 'resolved' && (
-                      <button
-                        style={styles.resolveBtn}
-                        onClick={() => handleResolve(item._id)}
-                      >
-                        ✅ Mark Resolved
-                      </button>
-                    )}
-                    <button
-                      style={styles.deleteBtn}
-                      onClick={() => handleDelete(item._id)}
-                    >
-                      🗑️ Delete
-                    </button>
+              <div className="mb-6 space-y-2">
+                <label className="text-xs font-mono text-[var(--text-muted)] pl-1 block uppercase tracking-wider">
+                  Status Designation
+                </label>
+                <div className="relative">
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    className="w-full md:w-64 bg-[var(--bg-main)]/50 border border-[var(--glass-border)] rounded-lg p-3 text-sm font-mono text-white focus:border-[var(--brand-purple)] outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="pending">PENDING_REVIEW</option>
+                    <option value="in_progress">IN_PROGRESS</option>
+                    <option value="resolved">RESOLVED</option>
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]">
+                    ▼
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--glass-border)]">
+                <NeonButton variant="ghost" onClick={() => setShowForm(false)}>
+                  CANCEL
+                </NeonButton>
+                <NeonButton 
+                  variant="purple" 
+                  onClick={handleSubmit}
+                  disabled={submitMutation.isPending || !formData.comment.trim()}
+                >
+                  {submitMutation.isPending ? 'TRANSMITTING...' : 'SUBMIT_DIAGNOSTIC'}
+                </NeonButton>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div variants={listVariants} initial="hidden" animate="visible" className="space-y-4">
+        {(!feedbackList || feedbackList.length === 0) ? (
+          <GlassCard className="p-16 text-center flex flex-col items-center justify-center border-dashed">
+            <MessageSquare size={64} className="text-[var(--text-muted)] opacity-20 mb-6" />
+            <h3 className="text-2xl font-display font-bold mb-2">NO_DIAGNOSTICS_FOUND</h3>
+            <p className="text-sm font-mono text-[var(--text-muted)] mb-8 max-w-md">
+              There is currently no feedback for this build. Initialize a new diagnostic entry to provide insights.
+            </p>
+            <NeonButton variant="purple" onClick={() => setShowForm(true)} className="flex items-center gap-2">
+              <Plus size={16} /> NEW_DIAGNOSTIC
+            </NeonButton>
+          </GlassCard>
+        ) : (
+          feedbackList.map((item) => (
+            <motion.div key={item._id} variants={itemVariants}>
+              <GlassCard className={`p-5 transition-all relative overflow-hidden group ${
+                item.status === 'resolved' 
+                  ? 'border-[var(--brand-success)]/30 bg-[var(--brand-success)]/5'
+                  : item.status === 'in_progress'
+                    ? 'border-[var(--brand-primary)]/30 bg-[var(--brand-primary)]/5'
+                    : 'border-[var(--brand-warning)]/30 bg-[var(--brand-warning)]/5'
+              }`}>
+                {/* Background glow based on status */}
+                <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2 opacity-20 pointer-events-none ${
+                  item.status === 'resolved' ? 'bg-[var(--brand-success)]'
+                    : item.status === 'in_progress' ? 'bg-[var(--brand-primary)]'
+                    : 'bg-[var(--brand-warning)]'
+                }`} />
+
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 relative z-10">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-2 text-sm font-bold text-white bg-[var(--bg-tertiary)] px-3 py-1 rounded-full border border-[var(--glass-border)]">
+                        <UserIcon size={14} className="text-[var(--brand-purple)]" />
+                        {item.reviewerId?.name || 'ANONYMOUS_USER'}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs font-mono text-[var(--text-muted)]">
+                        <Calendar size={12} />
+                        {new Date(item.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    
+                    <p className="text-sm text-[var(--text-main)] leading-relaxed font-mono whitespace-pre-wrap pl-2 border-l-2 border-[var(--glass-border)]">
+                      {item.comment}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-start gap-4 md:min-w-[140px]">
+                    {item.status === 'resolved' ? (
+                      <CyberBadge variant="success" className="flex items-center gap-1.5 font-mono shadow-[0_0_10px_rgba(0,255,136,0.3)]">
+                        <CheckCircle2 size={12} /> RESOLVED
+                      </CyberBadge>
+                    ) : item.status === 'in_progress' ? (
+                      <CyberBadge variant="primary" className="flex items-center gap-1.5 font-mono shadow-[0_0_10px_rgba(0,240,255,0.3)]">
+                        <RefreshCw size={12} className="animate-spin-slow" /> IN_PROGRESS
+                      </CyberBadge>
+                    ) : (
+                      <CyberBadge variant="warning" className="flex items-center gap-1.5 font-mono shadow-[0_0_10px_rgba(255,176,0,0.3)]">
+                        <Clock size={12} /> PENDING
+                      </CyberBadge>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      {item.status !== 'resolved' && (
+                        <button
+                          onClick={() => handleResolve(item._id)}
+                          disabled={resolveMutation.isPending}
+                          title="Mark Resolved"
+                          className="w-8 h-8 rounded bg-[var(--brand-success)]/10 text-[var(--brand-success)] border border-[var(--brand-success)]/30 flex items-center justify-center hover:bg-[var(--brand-success)] hover:text-white transition-colors"
+                        >
+                          <CheckCircle2 size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(item._id)}
+                        disabled={deleteMutation.isPending}
+                        title="Delete Diagnostic"
+                        className="w-8 h-8 rounded bg-[var(--brand-danger)]/10 text-[var(--brand-danger)] border border-[var(--brand-danger)]/30 flex items-center justify-center hover:bg-[var(--brand-danger)] hover:text-white transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          ))
+        )}
+      </motion.div>
+    </motion.div>
+  );
 }
 
-const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#f0f2f5' },
-  
-  navbar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '16px 32px',
-    backgroundColor: '#4f46e5',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-    flexShrink: 0
-  },
-  logo: { margin: 0, color: '#fff', fontSize: '24px', fontWeight: '700' },
-  navRight: { display: 'flex', alignItems: 'center', gap: '16px' },
-  username: { color: '#fff', fontSize: '14px', fontWeight: '500' },
-  backBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#fff',
-    color: '#4f46e5',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600'
-  },
-
-  body: {
-    padding: '32px',
-    maxWidth: '1000px',
-    margin: '0 auto',
-    width: '100%'
-  },
-
-  topRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '24px',
-    flexWrap: 'wrap',
-    gap: '16px'
-  },
-  title: { margin: 0, fontSize: '32px', color: '#333', fontWeight: '700' },
-  addBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600'
-  },
-
-  form: {
-    backgroundColor: '#fff',
-    padding: '24px',
-    borderRadius: '12px',
-    marginBottom: '32px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    border: '2px solid #4f46e5'
-  },
-  formTitle: {
-    margin: '0 0 20px',
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  formGroup: {
-    marginBottom: '16px'
-  },
-  label: {
-    display: 'block',
-    marginBottom: '8px',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  textarea: {
-    width: '100%',
-    padding: '10px 14px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-    resize: 'vertical'
-  },
-  select: {
-    width: '100%',
-    padding: '10px 14px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    cursor: 'pointer',
-    boxSizing: 'border-box'
-  },
-  formActions: {
-    display: 'flex',
-    gap: '12px',
-    marginTop: '20px'
-  },
-  submitBtn: {
-    padding: '10px 24px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600'
-  },
-  cancelBtn: {
-    padding: '10px 24px',
-    backgroundColor: '#e5e7eb',
-    color: '#666',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px'
-  },
-
-  section: { marginBottom: '32px' },
-  sectionTitle: { margin: '0 0 16px', fontSize: '20px', fontWeight: '600', color: '#333' },
-
-  empty: {
-    backgroundColor: '#fff',
-    padding: '40px 20px',
-    borderRadius: '12px',
-    textAlign: 'center',
-    color: '#999'
-  },
-
-  list: {
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    overflow: 'hidden'
-  },
-
-  feedbackItem: {
-    padding: '20px',
-    borderBottom: '1px solid #eee',
-    transition: 'all 0.2s'
-  },
-
-  feedbackHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px'
-  },
-  feedbackAuthor: { margin: 0, fontSize: '14px', fontWeight: '600', color: '#333' },
-  feedbackDate: { margin: '4px 0 0', fontSize: '12px', color: '#999' },
-
-  statusBadge: {
-    padding: '4px 10px',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: '600',
-    whiteSpace: 'nowrap'
-  },
-  pendingBadge: {
-    backgroundColor: '#fef3c7',
-    color: '#b45309'
-  },
-  progressBadge: {
-    backgroundColor: '#dbeafe',
-    color: '#0369a1'
-  },
-  resolvedBadge: {
-    backgroundColor: '#dcfce7',
-    color: '#166534'
-  },
-
-  feedbackComment: {
-    margin: '0 0 12px',
-    fontSize: '14px',
-    color: '#333',
-    lineHeight: '1.5'
-  },
-
-  feedbackActions: {
-    display: 'flex',
-    gap: '8px'
-  },
-  resolveBtn: {
-    padding: '6px 12px',
-    backgroundColor: '#10b981',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600'
-  },
-  deleteBtn: {
-    padding: '6px 12px',
-    backgroundColor: '#ef4444',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600'
-  },
-
-  errorBox: {
-    backgroundColor: '#fee',
-    border: '2px solid #ef4444',
-    borderRadius: '12px',
-    padding: '20px',
-    textAlign: 'center',
-    color: '#dc2626'
-  },
-  retryBtn: {
-    marginTop: '16px',
-    padding: '10px 20px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer'
-  }
-}
-
-export default Feedback
+export default Feedback;

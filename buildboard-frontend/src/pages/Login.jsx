@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import axios from 'axios'
 import { useNavigate, Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { GlassCard, NeonButton, CyberInput, CyberToast } from '../components/ui'
+import { ParticleField, AuroraBackground } from '../components/effects'
+import { Terminal, Lock, Mail, ArrowRight } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 function Login() {
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [formData, setFormData] = useState({
@@ -29,19 +35,19 @@ function Login() {
 
     // Validation
     if (!formData.email.trim()) {
-      setError('Email is required')
+      setError('Email protocol requires valid address')
       setLoading(false)
       return
     }
 
     if (!formData.password) {
-      setError('Password is required')
+      setError('Authentication key required')
       setLoading(false)
       return
     }
 
     try {
-      console.log('🔐 Logging in user...')
+      console.log('🔐 Initiating secure handshake...')
 
       const response = await axios.post(
         'http://localhost:5000/api/auth/login',
@@ -50,34 +56,29 @@ function Login() {
           password: formData.password
         },
         {
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           timeout: 10000
         }
       )
 
-      console.log('✅ Login successful:', response.data)
+      console.log('✅ Handshake accepted:', response.data)
 
-      // Save token and user to localStorage
-      localStorage.setItem('token', response.data.token)
-      localStorage.setItem('user', JSON.stringify(response.data.user))
-
-      alert('✅ Login successful!')
+      // Save token and user to context/localStorage
+      login(response.data.user, response.data.token)
       
       // Redirect to dashboard
       navigate('/dashboard')
     } catch (err) {
-      console.error('❌ Login error:', err)
+      console.error('❌ Connection refused:', err)
       
       if (err.response?.data?.message) {
         setError(err.response.data.message)
       } else if (err.response?.status === 401) {
-        setError('Invalid email or password')
+        setError('Invalid credentials. Access denied.')
       } else if (err.message === 'Network Error') {
-        setError('Network error. Make sure backend is running on http://localhost:5000')
+        setError('Nexus offline. Establish connection to central server.')
       } else {
-        setError(err.response?.data?.message || 'Login failed. Please try again.')
+        setError(err.response?.data?.message || 'Authentication failed. Please retry.')
       }
       
       setLoading(false)
@@ -85,159 +86,96 @@ function Login() {
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.formWrapper}>
-        <h1 style={styles.title}>BuildBoard+</h1>
-        <p style={styles.subtitle}>Login to your account</p>
-
-        <form onSubmit={handleLogin} style={styles.form}>
-          {/* Email Input */}
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Email</label>
-            <input
-              type="email"
-              name="email"
-              placeholder="Enter your email"
-              value={formData.email}
-              onChange={handleChange}
-              style={styles.input}
-              disabled={loading}
-              autoFocus
-            />
+    <div className="min-h-screen bg-[var(--bg-main)] flex items-center justify-center p-4 relative overflow-hidden selection:bg-[var(--brand-primary)] selection:text-[#0a0a0f]">
+      <AuroraBackground />
+      <ParticleField count={40} />
+      
+      <div className="absolute top-8 left-8">
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-purple)] text-[#0a0a0f] font-display font-bold shadow-[0_0_15px_rgba(0,212,255,0.5)] group-hover:shadow-[0_0_25px_rgba(0,212,255,0.8)] transition-all duration-300">
+            BB
           </div>
-
-          {/* Password Input */}
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Password</label>
-            <input
-              type="password"
-              name="password"
-              placeholder="Enter your password"
-              value={formData.password}
-              onChange={handleChange}
-              style={styles.input}
-              disabled={loading}
-            />
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div style={styles.errorBox}>
-              ❌ {error}
-            </div>
-          )}
-
-          {/* Login Button */}
-          <button
-            type="submit"
-            style={{
-              ...styles.button,
-              opacity: loading ? 0.6 : 1,
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-            disabled={loading}
-          >
-            {loading ? '⏳ Logging in...' : 'Login'}
-          </button>
-        </form>
-
-        {/* Register Link - ✅ UPDATED */}
-        <p style={styles.registerLink}>
-          Don't have an account? <Link to="/register" style={styles.link}>Register</Link>
-        </p>
+          <span className="font-display font-bold tracking-widest text-[var(--text-main)] group-hover:text-white transition-colors">
+            BUILDBOARD<span className="text-[var(--brand-primary)]">+</span>
+          </span>
+        </Link>
       </div>
+
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="w-full max-w-md relative z-10"
+      >
+        <GlassCard className="p-8 sm:p-10 border-t-[var(--brand-primary)]">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] mb-6 shadow-[0_0_30px_rgba(0,212,255,0.2)]">
+              <Terminal size={32} />
+            </div>
+            <h1 className="text-3xl font-display font-bold mb-2">System Login</h1>
+            <p className="text-sm text-[var(--text-muted)] font-mono">AUTHENTICATION PROTOCOL v2.0</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-5">
+              <CyberInput
+                icon={Mail}
+                label="Email Identity"
+                type="email"
+                name="email"
+                placeholder="operative@nexus.net"
+                value={formData.email}
+                onChange={handleChange}
+                disabled={loading}
+                autoFocus
+              />
+
+              <CyberInput
+                icon={Lock}
+                label="Access Key"
+                type="password"
+                name="password"
+                placeholder="••••••••••••"
+                value={formData.password}
+                onChange={handleChange}
+                disabled={loading}
+              />
+            </div>
+
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="p-3 rounded-lg bg-[var(--brand-danger)]/10 border border-[var(--brand-danger)]/30 text-[var(--brand-danger)] text-sm font-mono flex items-start gap-2"
+              >
+                <div className="mt-0.5">⚠️</div>
+                <div>{error}</div>
+              </motion.div>
+            )}
+
+            <NeonButton
+              type="submit"
+              variant="primary"
+              className="w-full h-12 text-base mt-4"
+              disabled={loading}
+              loading={loading}
+            >
+              {loading ? 'Authenticating...' : 'Initialize Session'} <ArrowRight size={18} />
+            </NeonButton>
+          </form>
+
+          <div className="mt-8 text-center border-t border-[var(--glass-border)] pt-6">
+            <p className="text-sm text-[var(--text-muted)]">
+              Unregistered operative?{' '}
+              <Link to="/register" className="text-[var(--brand-primary)] hover:text-white font-medium transition-colors hover:underline underline-offset-4">
+                Request Clearance
+              </Link>
+            </p>
+          </div>
+        </GlassCard>
+      </motion.div>
     </div>
   )
-}
-
-const styles = {
-  container: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#f0f2f5',
-    fontFamily: 'system-ui, -apple-system, sans-serif'
-  },
-  formWrapper: {
-    backgroundColor: '#fff',
-    padding: '40px',
-    borderRadius: '12px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-    width: '100%',
-    maxWidth: '420px'
-  },
-  title: {
-    margin: '0 0 10px',
-    fontSize: '32px',
-    fontWeight: '700',
-    color: '#4f46e5',
-    textAlign: 'center'
-  },
-  subtitle: {
-    margin: '0 0 30px',
-    fontSize: '14px',
-    color: '#666',
-    textAlign: 'center'
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px'
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px'
-  },
-  label: {
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  input: {
-    padding: '12px 14px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    transition: 'border-color 0.2s',
-    boxSizing: 'border-box'
-  },
-  errorBox: {
-    padding: '12px',
-    backgroundColor: '#fee',
-    border: '1px solid #fcc',
-    borderRadius: '8px',
-    color: '#c33',
-    fontSize: '13px',
-    fontWeight: '600',
-    textAlign: 'center'
-  },
-  button: {
-    padding: '12px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    marginTop: '10px',
-    transition: 'all 0.2s'
-  },
-  registerLink: {
-    margin: '20px 0 0',
-    fontSize: '13px',
-    color: '#666',
-    textAlign: 'center'
-  },
-  link: {
-    color: '#4f46e5',
-    textDecoration: 'none',
-    fontWeight: '600',
-    cursor: 'pointer'
-  }
 }
 
 export default Login
