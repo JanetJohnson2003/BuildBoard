@@ -9,6 +9,7 @@ const morgan = require('morgan');
 
 const { initializeSocket } = require('./config/socket');
 const { generalLimiter } = require('./middleware/rateLimiter');
+const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 const server = http.createServer(app);
@@ -53,6 +54,7 @@ mongoose
   .then(() => console.log('MongoDB connected to BuildBoard+'))
   .catch((err) => console.error('MongoDB error:', err));
 
+// Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/repos', require('./routes/repos'));
@@ -67,21 +69,19 @@ app.use('/api/projects', require('./routes/projects'));
 app.use('/api/versions', require('./routes/versions'));
 app.use('/api/feedback', require('./routes/feedback'));
 
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'BuildBoard+ API is running' });
 });
 
+// 404 handler
 app.use((req, res) => {
   console.log(`404 - Route not found: ${req.method} ${req.path}`);
   res.status(404).json({ message: 'Route not found' });
 });
 
-app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal server error',
-  });
-});
+// Global error handler (must be last)
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
