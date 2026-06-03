@@ -6,11 +6,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../lib/api';
 import { pageTransition, sidebarTransition } from '../../utils/animations';
-import { NeonButton, CyberDropdown, CyberDropdownItem, CyberInput } from '../ui';
+import { NeonButton, CyberDropdown, CyberDropdownItem, CyberInput, SystemBroadcast } from '../ui';
 import { 
   Menu, Search, Bot, Cloud, Plus, CircleDot, GitPullRequest, 
   Layout, Inbox, Book, Moon, Sun, User, Settings, LogOut, X, 
-  Cpu, Zap, GitBranch, Home, ChevronRight
+  Cpu, Zap, GitBranch, Home, ChevronRight, Terminal, Shield
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 
@@ -19,6 +19,7 @@ const pageTitles = {
   '/explore': 'Explore',
   '/organizations': 'Organizations',
   '/admin': 'Admin',
+  '/godmode': 'God Mode',
   '/new': 'New Repository',
   '/profile': 'Profile',
   '/issues': 'Issues',
@@ -275,8 +276,14 @@ const GlobalSidebar = ({ open, onClose, user, onOpenPalette }) => {
                 <NavLink to="/pulls" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><GitPullRequest size={18} /> Pull Requests</NavLink>
                 <NavLink to="/explore" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><Book size={18} /> Repositories</NavLink>
                 <NavLink to="/organizations" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><Layout size={18} /> Projects</NavLink>
+                <NavLink to="/notepad" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] shadow-[inset_2px_0_0_var(--brand-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--glass-highlight)]'}`}><Terminal size={18} /> Notepad</NavLink>
                 {(user?.role === 'admin' || user?.role === 'reviewer') && (
                   <NavLink to="/reviewer" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-purple)]/10 text-[var(--brand-purple)] shadow-[inset_2px_0_0_var(--brand-purple)]' : 'text-[var(--brand-purple)] opacity-80 hover:opacity-100 hover:bg-[var(--glass-highlight)]'}`}><Cpu size={18} /> Reviewer Terminal</NavLink>
+                )}
+                {user?.role === 'admin' && (
+                  <NavLink to="/godmode" onClick={onClose} className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-[var(--brand-danger)]/10 text-[var(--brand-danger)] shadow-[inset_2px_0_0_var(--brand-danger)]' : 'text-[var(--brand-danger)] opacity-90 hover:opacity-100 hover:bg-[var(--glass-highlight)]'}`}>
+                    <Shield size={18} /> God Mode
+                  </NavLink>
                 )}
               </div>
 
@@ -369,6 +376,7 @@ const AppLayout = () => {
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] selection:bg-[var(--brand-primary)] selection:text-[#0a0a0f] flex flex-col">
+      <SystemBroadcast />
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 h-16 border-b border-[var(--glass-border)] bg-[var(--bg-main)]/80 backdrop-blur-xl">
         <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[var(--brand-primary)] to-transparent opacity-20" />

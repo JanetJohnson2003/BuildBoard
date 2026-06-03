@@ -11,6 +11,7 @@ const RepoLayout = () => {
     { name: 'Pull Requests', path: `/${owner}/${repo}?tab=pull-requests`, icon: 'pr' },
     { name: 'Actions', path: `/${owner}/${repo}?tab=actions`, icon: 'play' },
     { name: 'Projects', path: `/${owner}/${repo}?tab=projects`, icon: 'project' },
+    { name: 'Architecture', path: `/${owner}/${repo}/architecture`, icon: 'map' },
     { name: 'Security', path: `/${owner}/${repo}?tab=security`, icon: 'shield' },
     { name: 'Insights', path: `/${owner}/${repo}/analytics`, icon: 'graph' },
     { name: 'Comm-Link', path: `/${owner}/${repo}/chat`, icon: 'message' },

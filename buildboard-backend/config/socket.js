@@ -33,6 +33,47 @@ const initializeSocket = (server) => {
       socket.leave(`repo:${repoId}`);
     });
 
+    // Nexus Collab (Live Multiplayer Coding)
+    socket.on('ide:join', ({ roomId, username }) => {
+      socket.join(roomId);
+      socket.username = username;
+      // Get all clients in room
+      const clients = io.sockets.adapter.rooms.get(roomId);
+      const users = [];
+      if (clients) {
+        for (const clientId of clients) {
+          const clientSocket = io.sockets.sockets.get(clientId);
+          if (clientSocket && clientSocket.username) {
+            users.push(clientSocket.username);
+          }
+        }
+      }
+      io.to(roomId).emit('ide:users', users);
+    });
+
+    socket.on('ide:change', ({ roomId, content, username }) => {
+      socket.to(roomId).emit('ide:update', { content, username });
+    });
+
+    socket.on('ide:cursor', ({ roomId, position, username }) => {
+      socket.to(roomId).emit('ide:cursor_update', { position, username });
+    });
+
+    socket.on('ide:leave', ({ roomId }) => {
+      socket.leave(roomId);
+      const clients = io.sockets.adapter.rooms.get(roomId);
+      const users = [];
+      if (clients) {
+        for (const clientId of clients) {
+          const clientSocket = io.sockets.sockets.get(clientId);
+          if (clientSocket && clientSocket.username) {
+            users.push(clientSocket.username);
+          }
+        }
+      }
+      io.to(roomId).emit('ide:users', users);
+    });
+
     socket.on('disconnect', () => {
       if (socket.userId) {
         onlineUsers.delete(socket.userId);

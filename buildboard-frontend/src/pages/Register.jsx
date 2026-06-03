@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { GlassCard, NeonButton, CyberInput } from '../components/ui'
+import { GlassCard, NeonButton, CyberInput, toast } from '../components/ui'
 import { ParticleField, AuroraBackground } from '../components/effects'
 import { Terminal, Lock, Mail, User, Shield, Eye, ArrowRight, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -10,17 +10,29 @@ import { twMerge } from 'tailwind-merge'
 
 function Register() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login: _, register: registerUser, sendOtp } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [step, setStep] = useState(1) // Step 1: Role, Step 2: Details
+  const [step, setStep] = useState(1) // Step 1: Role, Step 2: Details, Step 3: OTP
+  const [countdown, setCountdown] = useState(0)
   const [formData, setFormData] = useState({
     role: '', // 'user', 'reviewer', 'admin'
+    username: '',
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    otp: ''
   })
+
+  // Handle countdown timer for Resend OTP
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   // Handle role selection
   const handleRoleSelect = (role) => {
@@ -41,14 +53,15 @@ function Register() {
     setError(null)
   }
 
-  // Handle registration
-  const handleRegister = async (e) => {
+  // Handle OTP request
+  const handleRequestOtp = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     // Validation
     if (!formData.name.trim()) return setError('Name identity required') || setLoading(false)
+    if (!formData.username.trim()) return setError('System alias required') || setLoading(false)
     if (!formData.email.trim()) return setError('Email protocol requires valid address') || setLoading(false)
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return setError('Invalid email signature') || setLoading(false)
     if (!formData.password) return setError('Encryption key required') || setLoading(false)
@@ -56,29 +69,47 @@ function Register() {
     if (formData.password !== formData.confirmPassword) return setError('Encryption keys do not match') || setLoading(false)
 
     try {
-      const response = await axios.post(
-        'http://localhost:5000/api/auth/register',
-        {
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          role: formData.role
-        },
-        { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
-      )
+      const data = await sendOtp(formData.email)
+      setStep(3)
+      setCountdown(10) // Start 10s cooldown
+      setLoading(false)
+      if (data?.devOtp) {
+        toast.info(`[SYSTEM INTERCEPT] Dev OTP: ${data.devOtp}`, { duration: 10000 });
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to request OTP. Check network link.')
+      setLoading(false)
+    }
+  }
 
-      // Save token and user via context
-      login(response.data.user, response.data.token)
+  // Handle final registration with OTP
+  const handleFinalRegister = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    if (!formData.otp.trim()) return setError('OTP is required') || setLoading(false)
+
+    try {
+      await registerUser({
+        username: formData.username,
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        otp: formData.otp
+      })
+
       navigate('/dashboard')
     } catch (err) {
       if (err.response?.data?.message) {
         setError(err.response.data.message)
       } else if (err.response?.status === 409) {
         setError('Identity already registered in Nexus. Please login.')
-      } else if (err.message === 'Network Error') {
+      } else if (err.message === 'Network Error' || err.code === 'ERR_NETWORK') {
         setError('Nexus offline. Establish connection to central server.')
       } else {
-        setError(err.response?.data?.message || 'Registration failed. Check network link.')
+        setError(err.response?.data?.message || err.message || 'Registration failed. Check network link.')
       }
       setLoading(false)
     }
@@ -188,17 +219,28 @@ function Register() {
                   </div>
                 </div>
 
-                <form onSubmit={handleRegister} className="space-y-5">
-                  <CyberInput
-                    icon={User}
-                    label="Public Identity"
-                    name="name"
-                    placeholder="Enter full name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    disabled={loading}
-                    autoFocus
-                  />
+                <form onSubmit={handleRequestOtp} className="space-y-5">
+                  <div className="grid grid-cols-2 gap-4">
+                    <CyberInput
+                      icon={User}
+                      label="Public Identity"
+                      name="name"
+                      placeholder="Enter full name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      disabled={loading}
+                      autoFocus
+                    />
+                    <CyberInput
+                      icon={Terminal}
+                      label="System Alias"
+                      name="username"
+                      placeholder="Enter username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      disabled={loading}
+                    />
+                  </div>
                   <CyberInput
                     icon={Mail}
                     label="Email Protocol"
@@ -252,6 +294,77 @@ function Register() {
                   >
                     {loading ? 'Initializing Node...' : 'Register Identity'} <ArrowRight size={18} />
                   </NeonButton>
+                </form>
+              </GlassCard>
+            </motion.div>
+          )}
+          
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="w-full"
+            >
+              <GlassCard className="w-full max-w-md p-8 border-t-2 border-t-[var(--brand-primary)] relative overflow-visible">
+                {/* Header */}
+                <div className="mb-8">
+                  <button 
+                    onClick={() => setStep(2)}
+                    className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--brand-primary)] transition-colors mb-4"
+                  >
+                    <ArrowLeft size={16} /> RE-ENTER DETAILS
+                  </button>
+                  <h2 className="text-3xl font-display font-bold tracking-tight mb-2">Verify Identity</h2>
+                  <div className="flex items-center gap-2 text-[var(--brand-primary)] text-sm font-mono bg-[var(--brand-primary)]/10 py-1 px-3 rounded inline-flex border border-[var(--brand-primary)]/30">
+                    <Mail size={14} /> OTP dispatched to {formData.email}
+                  </div>
+                </div>
+
+                <form onSubmit={handleFinalRegister} className="space-y-5">
+                  <CyberInput
+                    icon={Lock}
+                    label="One-Time Password (OTP)"
+                    name="otp"
+                    placeholder="Enter 6-digit code"
+                    value={formData.otp}
+                    onChange={handleChange}
+                    disabled={loading}
+                    autoFocus
+                  />
+
+                  {error && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="p-3 rounded-lg bg-[var(--brand-danger)]/10 border border-[var(--brand-danger)]/30 text-[var(--brand-danger)] text-sm font-mono flex items-start gap-2 mt-2"
+                    >
+                      <div className="mt-0.5">⚠️</div>
+                      <div>{error}</div>
+                    </motion.div>
+                  )}
+
+                  <NeonButton
+                    type="submit"
+                    variant="primary"
+                    className="w-full h-12 text-base mt-6"
+                    disabled={loading}
+                    loading={loading}
+                  >
+                    {loading ? 'Verifying Node...' : 'Complete Registration'} <ArrowRight size={18} />
+                  </NeonButton>
+
+                  <div className="mt-4 text-center">
+                    <button
+                      type="button"
+                      onClick={handleRequestOtp}
+                      disabled={countdown > 0 || loading}
+                      className="text-sm font-mono text-[var(--brand-primary)] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {countdown > 0 ? `RESEND OTP IN ${countdown}s` : 'RESEND OTP'}
+                    </button>
+                  </div>
                 </form>
               </GlassCard>
             </motion.div>

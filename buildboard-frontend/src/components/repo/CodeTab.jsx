@@ -5,7 +5,7 @@ import api from '../../lib/api';
 import { GlassCard, NeonButton, CyberInput, CyberBadge } from '../ui';
 import { 
   Folder, File, FileText, Code2, ShieldAlert, GitBranch, Download, 
-  Upload, Search, Edit2, Play, Plus, X, AlertTriangle, Terminal, Globe, Star
+  Upload, Search, Edit2, Play, Plus, X, AlertTriangle, Terminal, Globe, Star, Activity
 } from 'lucide-react';
 import { IDEEditor } from '../ide/WebIDE';
 import { itemVariants, listVariants } from '../../utils/animations';
@@ -49,6 +49,50 @@ const CodePreview = ({ file }) => {
   );
 };
 
+const TimeTravelSlider = ({ owner, repo, filePath }) => {
+  const [currentCommitIndex, setCurrentCommitIndex] = useState(0);
+  const { data: history, isLoading } = useQuery({
+    queryKey: ['file-history', owner, repo, filePath],
+    queryFn: async () => (await api.get(`/repos/${owner}/${repo}/file/history`, { params: { path: filePath } })).data,
+  });
+
+  if (isLoading) return <div className="p-4 text-xs font-mono text-[var(--brand-primary)] animate-pulse">LOADING_TEMPORAL_DATA...</div>;
+  if (!history || history.length === 0) return null;
+
+  const commit = history[currentCommitIndex];
+
+  return (
+    <div className="p-4 bg-black/60 border-t border-[var(--glass-border)] flex flex-col gap-4 relative overflow-hidden">
+       <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+          <Terminal size={64} />
+       </div>
+       <div className="flex justify-between items-center text-xs font-mono">
+          <div className="flex items-center gap-2">
+             <Activity size={14} className="text-[var(--brand-warning)] animate-pulse" />
+             <span className="text-[var(--text-muted)] font-bold">TEMPORAL_PLAYBACK</span>
+          </div>
+          <CyberBadge variant="warning" size="sm">{commit.sha.substring(0, 7)}</CyberBadge>
+       </div>
+       <input 
+         type="range" 
+         min={0} 
+         max={history.length - 1} 
+         value={currentCommitIndex}
+         onChange={(e) => setCurrentCommitIndex(parseInt(e.target.value))}
+         className="w-full h-1 bg-[var(--glass-border)] rounded-lg appearance-none cursor-pointer accent-[var(--brand-warning)] relative z-10" 
+         style={{ direction: 'rtl' }}
+       />
+       <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)]">
+          <span>{new Date(commit.createdAt).toLocaleString()}</span>
+          <span>{history.length} COMMITS</span>
+       </div>
+       <div className="text-[11px] font-mono text-[var(--text-main)] mt-2 bg-white/5 p-2 rounded border border-white/10">
+         <span className="text-[var(--brand-primary)] font-bold">{commit.author?.username}</span>: {commit.message}
+       </div>
+    </div>
+  );
+};
+
 export const CodeTab = ({ owner, repo, repoData, setIssueModalOpen, setSelectedFileForIssue }) => {
   const queryClient = useQueryClient();
   const [path, setPath] = useState('');
@@ -70,6 +114,7 @@ export const CodeTab = ({ owner, repo, repoData, setIssueModalOpen, setSelectedF
       const { data } = await api.get(`/repos/${owner}/${repo}/files`, { params: { path } });
       return data;
     },
+    enabled: !!owner && !!repo,
   });
 
   const fileQuery = useQuery({
@@ -95,6 +140,7 @@ export const CodeTab = ({ owner, repo, repoData, setIssueModalOpen, setSelectedF
       queryClient.invalidateQueries({ queryKey: ['repo-files', owner, repo] });
       queryClient.invalidateQueries({ queryKey: ['repo-insights', owner, repo] });
       setSelectedFile(newFile.path);
+      setNewFile({ path: '', content: '', message: 'Add file' });
     },
   });
 
@@ -445,15 +491,20 @@ export const CodeTab = ({ owner, repo, repoData, setIssueModalOpen, setSelectedF
                       </button>
                     </div>
                   </div>
+
+
                   {(fileQuery.data?.mimeType?.startsWith('image/') || fileQuery.data?.name?.split('.').pop()?.toLowerCase() === 'pdf') ? (
                     <CodePreview file={fileQuery.data} />
                   ) : (
-                    <IDEEditor 
-                      file={fileQuery.data} 
-                      owner={owner} 
-                      repo={repo} 
-                      branch={repoData.defaultBranch} 
-                    />
+                    <div className="flex flex-col">
+                      <IDEEditor 
+                        file={fileQuery.data} 
+                        owner={owner} 
+                        repo={repo} 
+                        branch={repoData.defaultBranch} 
+                      />
+                      <TimeTravelSlider owner={owner} repo={repo} filePath={selectedFile} />
+                    </div>
                   )}
                 </GlassCard>
               </motion.div>
@@ -486,7 +537,11 @@ export const CodeTab = ({ owner, repo, repoData, setIssueModalOpen, setSelectedF
                       <div className="p-12 text-center flex flex-col items-center justify-center">
                         <Search size={32} className="text-[var(--text-muted)] opacity-30 mb-4" />
                         <p className="text-sm font-mono text-[var(--text-muted)]">
-                          {searchQuery ? 'NO_MATCHING_ENTITIES_FOUND' : 'DIRECTORY_IS_EMPTY'}
+                          {filesQuery.isError
+                            ? (filesQuery.error?.response?.data?.message || 'Failed to load files')
+                            : searchQuery
+                              ? 'NO_MATCHING_ENTITIES_FOUND'
+                              : 'DIRECTORY_IS_EMPTY'}
                         </p>
                       </div>
                     )}

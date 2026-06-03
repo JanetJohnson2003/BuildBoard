@@ -3,6 +3,7 @@ const authController = require('../controllers/authController');
 const auth = require('../middleware/authMiddleware');
 const { authLimiter } = require('../middleware/rateLimiter');
 
+router.post('/send-otp', authLimiter, authController.sendOtp);
 router.post('/register', authLimiter, authController.register);
 router.post('/login', authLimiter, authController.login);
 router.post('/refresh', authController.refreshToken);

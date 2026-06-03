@@ -6,6 +6,7 @@ const Feedback = require('../models/Feedback');
 const ActivityLog = require('../models/ActivityLog');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { getIO } = require('../config/socket');
 
 // ✅ Helper: Get user ID
 const getUserId = (req) => {
@@ -116,6 +117,39 @@ exports.createUser = async (req, res) => {
     res.status(201).json({ message: 'User created successfully', user });
   } catch (error) {
     console.error('❌ Create user error:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ==================== SYSTEM BROADCAST ====================
+
+// SYSTEM BROADCAST (Admin Only)
+exports.systemBroadcast = async (req, res) => {
+  try {
+    const adminId = getUserId(req);
+    const { message, severity = 'info' } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ message: 'Broadcast message is required' });
+    }
+
+    console.log(`📢 System Broadcast [${severity.toUpperCase()}]: ${message}`);
+
+    // Emit to all connected clients
+    const io = getIO();
+    io.emit('system:announcement', {
+      message,
+      severity,
+      timestamp: new Date().toISOString(),
+      adminId
+    });
+
+    // Log the broadcast activity
+    await logActivity('SYSTEM_BROADCAST', adminId, { message, severity });
+
+    res.json({ message: 'Broadcast transmitted successfully' });
+  } catch (error) {
+    console.error('❌ System broadcast error:', error.message);
     res.status(500).json({ message: error.message });
   }
 };

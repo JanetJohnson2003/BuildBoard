@@ -6,6 +6,13 @@ const ActivityLog = require('../models/ActivityLog');
 const Label = require('../models/Label');
 const Milestone = require('../models/Milestone');
 const { emitToUser, emitToRepo } = require('../config/socket');
+const { findRepositoryByOwnerSlug } = require('../utils/repositoryResolver');
+
+const resolveRepoFromParams = (owner, repo) =>
+  findRepositoryByOwnerSlug(owner, repo, [
+    { path: 'owner', select: 'username' },
+    { path: 'collaborators.user', select: 'username' },
+  ]);
 
 // Helper to get next issue number
 const getNextNumber = async (repoId) => {
@@ -39,8 +46,8 @@ exports.getIssues = async (req, res) => {
     const { owner, repo } = req.params;
     const { status = 'open', label, assignee, sort = 'newest' } = req.query;
 
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -81,8 +88,8 @@ exports.getIssues = async (req, res) => {
 exports.getIssueBoard = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -110,8 +117,8 @@ exports.getIssueBoard = async (req, res) => {
 exports.getLabels = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -127,8 +134,8 @@ exports.getLabels = async (req, res) => {
 exports.createLabel = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -149,8 +156,8 @@ exports.createLabel = async (req, res) => {
 exports.getMilestones = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -166,8 +173,8 @@ exports.getMilestones = async (req, res) => {
 exports.createMilestone = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -189,8 +196,8 @@ exports.createMilestone = async (req, res) => {
 exports.getIssue = async (req, res) => {
   try {
     const { owner, repo, number } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -228,8 +235,8 @@ exports.createIssue = async (req, res) => {
 
     if (!title) return res.status(400).json({ message: 'Issue title is required' });
 
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -298,10 +305,10 @@ exports.createIssue = async (req, res) => {
 exports.updateIssue = async (req, res) => {
   try {
     const { owner, repo, number } = req.params;
-    const { title, body, status, labels, assignees, milestone, priority } = req.body;
+    const { title, body, status, labels, assignees, milestone, priority, bountyAmount } = req.body;
 
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {
@@ -317,6 +324,7 @@ exports.updateIssue = async (req, res) => {
     if (assignees !== undefined) issue.assignees = assignees;
     if (milestone !== undefined) issue.milestone = milestone;
     if (priority !== undefined) issue.priority = priority;
+    if (bountyAmount !== undefined) issue.bountyAmount = bountyAmount;
 
     if (status !== undefined && status !== issue.status) {
       const prevStatus = issue.status;
@@ -368,8 +376,8 @@ exports.addComment = async (req, res) => {
 
     if (!body) return res.status(400).json({ message: 'Comment body is required' });
 
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await resolveRepoFromParams(owner, repo);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
     if (!canRead(req, repoDoc)) {

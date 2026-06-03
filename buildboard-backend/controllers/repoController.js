@@ -7,6 +7,7 @@ const Label = require('../models/Label');
 const Notification = require('../models/Notification');
 const { emitToUser } = require('../config/socket');
 const slugify = require('slugify');
+const { findRepositoryByOwnerSlug } = require('../utils/repositoryResolver');
 
 // GET ALL REPOS FOR CURRENT USER
 exports.getMyRepos = async (req, res) => {
@@ -52,38 +53,41 @@ exports.getExploreRepos = async (req, res) => {
 exports.getRepo = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo })
-      .populate('owner', 'username name avatar')
-      .populate('collaborators.user', 'username name avatar');
+    const repoDoc = await findRepositoryByOwnerSlug(owner, repo, [
+      { path: 'owner', select: 'username name avatar' },
+      { path: 'collaborators.user', select: 'username name avatar' },
+    ]);
 
     if (!repoDoc) return res.status(404).json({ message: 'Repository not found' });
-
-    if (repoDoc.owner.username !== owner) {
-      return res.status(404).json({ message: 'Repository not found' });
-    }
 
     // Check access for private repos
     if (repoDoc.visibility === 'private') {
       const userId = req.user?._id?.toString();
       const isOwner = repoDoc.owner._id.toString() === userId;
-      const isCollaborator = repoDoc.collaborators.some(
-        (c) => c.user._id.toString() === userId
-      );
+      const isCollaborator = repoDoc.collaborators.some((c) => {
+        const collaboratorId = c.user?._id?.toString?.() || c.user?.toString?.();
+        return collaboratorId === userId;
+      });
       const isReviewer = req.user?.role === 'reviewer' || req.user?.role === 'admin';
-      
+
       if (!isOwner && !isCollaborator && !isReviewer) {
         return res.status(404).json({ message: 'Repository not found' });
       }
     }
 
-    // Check if current user has starred
+    // Check if current user has starred/watched
     let isStarred = false;
+    let isWatched = false;
     if (req.user) {
       const star = await Star.findOne({ user: req.user._id, repository: repoDoc._id });
       isStarred = !!star;
+      
+      const Watch = require('../models/Watch');
+      const watch = await Watch.findOne({ user: req.user._id, repository: repoDoc._id });
+      isWatched = !!watch;
     }
 
-    res.json({ ...repoDoc.toJSON(), isStarred });
+    res.json({ ...repoDoc.toJSON(), isStarred, isWatched });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -188,9 +192,11 @@ exports.createRepo = async (req, res) => {
 exports.updateRepo = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
+    const repoDoc = await findRepositoryByOwnerSlug(owner, repo, [
+      { path: 'owner', select: 'username' },
+    ]);
 
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
 
@@ -225,9 +231,11 @@ exports.updateRepo = async (req, res) => {
 exports.deleteRepo = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
+    const repoDoc = await findRepositoryByOwnerSlug(owner, repo, [
+      { path: 'owner', select: 'username' },
+    ]);
 
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
 
@@ -258,9 +266,11 @@ exports.deleteRepo = async (req, res) => {
 exports.toggleStar = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
+    const repoDoc = await findRepositoryByOwnerSlug(owner, repo, [
+      { path: 'owner', select: 'username' },
+    ]);
 
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
 
@@ -308,10 +318,16 @@ exports.toggleStar = async (req, res) => {
 exports.forkRepo = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const sourceRepo = await Repository.findOne({ slug: repo }).populate('owner', 'username');
+    const sourceRepo = await findRepositoryByOwnerSlug(owner, repo, [
+      { path: 'owner', select: 'username' },
+    ]);
 
-    if (!sourceRepo || sourceRepo.owner.username !== owner) {
+    if (!sourceRepo) {
       return res.status(404).json({ message: 'Repository not found' });
+    }
+
+    if (sourceRepo.owner._id.toString() === req.user._id.toString()) {
+      return res.status(400).json({ message: 'You cannot fork your own repository' });
     }
 
     // Check if already forked
@@ -323,9 +339,22 @@ exports.forkRepo = async (req, res) => {
       return res.status(409).json({ message: 'You have already forked this repository' });
     }
 
+    let forkName = sourceRepo.name;
+    let forkSlug = sourceRepo.slug;
+
+    // Check if slug already exists for this user
+    let existingRepo = await Repository.findOne({ owner: req.user._id, slug: forkSlug });
+    let counter = 1;
+    while (existingRepo) {
+      forkName = `${sourceRepo.name}-fork-${counter}`;
+      forkSlug = `${sourceRepo.slug}-fork-${counter}`;
+      existingRepo = await Repository.findOne({ owner: req.user._id, slug: forkSlug });
+      counter++;
+    }
+
     const forkedRepo = await Repository.create({
-      name: sourceRepo.name,
-      slug: sourceRepo.slug,
+      name: forkName,
+      slug: forkSlug,
       description: sourceRepo.description,
       owner: req.user._id,
       visibility: 'public',
@@ -392,8 +421,10 @@ exports.addCollaborator = async (req, res) => {
     const { owner, repo } = req.params;
     const { username, role } = req.body;
 
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    const repoDoc = await findRepositoryByOwnerSlug(owner, repo, [
+      { path: 'owner', select: 'username' },
+    ]);
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
 
@@ -433,6 +464,41 @@ exports.addCollaborator = async (req, res) => {
     await repoDoc.populate('collaborators.user', 'username name avatar');
 
     res.json(repoDoc);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET STARGAZERS
+exports.getStargazers = async (req, res) => {
+  try {
+    const { owner, repo } = req.params;
+    const repoDoc = await findRepositoryByOwnerSlug(owner, repo);
+    if (!repoDoc) return res.status(404).json({ message: 'Repository not found' });
+
+    const stars = await Star.find({ repository: repoDoc._id })
+      .populate('user', 'username name avatar bio')
+      .sort({ createdAt: -1 });
+
+    const users = stars.map((s) => s.user).filter(Boolean);
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET FORKS
+exports.getForks = async (req, res) => {
+  try {
+    const { owner, repo } = req.params;
+    const repoDoc = await findRepositoryByOwnerSlug(owner, repo);
+    if (!repoDoc) return res.status(404).json({ message: 'Repository not found' });
+
+    const forks = await Repository.find({ forkedFrom: repoDoc._id })
+      .populate('owner', 'username name avatar bio')
+      .sort({ createdAt: -1 });
+
+    res.json(forks);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

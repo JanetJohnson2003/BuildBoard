@@ -21,7 +21,9 @@ const Issue = require('../models/Issue');
 const ActivityLog = require('../models/ActivityLog');
 const Notification = require('../models/Notification');
 const ChatMessage = require('../models/ChatMessage');
+const Snippet = require('../models/Snippet');
 const { emitToRepo, emitToUser } = require('../config/socket');
+const { findRepositoryByOwnerSlug } = require('../utils/repositoryResolver');
 
 const repoPopulate = [
   { path: 'owner', select: 'username name avatar' },
@@ -66,22 +68,24 @@ const makeSha = (seed) =>
 
 const resolveRepo = async (req) => {
   const { owner, repo } = req.params;
-  const repoDoc = await Repository.findOne({ slug: repo }).populate(repoPopulate);
-  if (!repoDoc) return null;
-
-  const ownerMatches = repoDoc.owner?.username === owner;
-  const orgMatches = repoDoc.organization?.slug === owner;
-  if (!ownerMatches && !orgMatches) return null;
-
-  return repoDoc;
+  return findRepositoryByOwnerSlug(owner, repo, repoPopulate);
 };
 
 const canWrite = (req, repoDoc) => {
-  const userId = req.user._id.toString();
-  if (repoDoc.owner?._id?.toString() === userId) return true;
+  const userId = req.user._id?.toString?.();
+  if (!userId) return false;
 
-  return repoDoc.collaborators.some((collaborator) => {
-    const collaboratorId = collaborator.user?._id?.toString?.() || collaborator.user?.toString();
+  const ownerId = repoDoc.owner?._id?.toString?.() || repoDoc.owner?.toString?.();
+  const ownerMatchesId = ownerId === userId;
+  const ownerMatchesUsername =
+    repoDoc.owner?.username?.toLowerCase?.() === req.user.username?.toLowerCase?.() ||
+    req.params?.owner?.toLowerCase?.() === req.user.username?.toLowerCase?.();
+
+  if (ownerMatchesId || ownerMatchesUsername) return true;
+  if (['admin', 'reviewer'].includes(req.user.role)) return true;
+
+  return (repoDoc.collaborators || []).some((collaborator) => {
+    const collaboratorId = collaborator.user?._id?.toString?.() || collaborator.user?.toString?.();
     return collaboratorId === userId && ['write', 'admin'].includes(collaborator.role);
   });
 };
@@ -95,8 +99,43 @@ const ensureRepo = async (req, res) => {
   return repoDoc;
 };
 
-const ensureBranch = async (repoId, branchName = 'main') =>
-  Branch.findOne({ repository: repoId, name: branchName });
+const ensureBranch = async (repoId, branchName = 'main', userId = null) => {
+  let branchDoc = await Branch.findOne({ repository: repoId, name: branchName });
+  if (branchDoc || !userId) return branchDoc;
+
+  branchDoc = await Branch.create({
+    repository: repoId,
+    name: branchName,
+    isDefault: branchName === 'main',
+    createdBy: userId,
+  });
+
+  const repo = await Repository.findById(repoId).select('readme defaultBranch name');
+  if (repo && !repo.defaultBranch) {
+    repo.defaultBranch = branchName;
+    await repo.save();
+  }
+
+  const readmeContent =
+    repo?.readme || `# ${repo?.name || 'Repository'}\n\nInitialized by BuildBoard+.`;
+  await File.findOneAndUpdate(
+    { repository: repoId, branch: branchDoc._id, path: 'README.md' },
+    {
+      repository: repoId,
+      branch: branchDoc._id,
+      path: 'README.md',
+      name: 'README.md',
+      type: 'file',
+      content: readmeContent,
+      size: Buffer.byteLength(readmeContent, 'utf-8'),
+      mimeType: 'text/markdown',
+      lastModifiedBy: userId,
+    },
+    { upsert: true, setDefaultsOnInsert: true }
+  );
+
+  return branchDoc;
+};
 
 const ensureDirectoryRecords = async (repoId, branchId, filePath, userId) => {
   const parts = normalizeFilePath(filePath).split('/').filter(Boolean);
@@ -173,7 +212,7 @@ exports.getFiles = async (req, res) => {
 
     const branchName = req.query.branch || repoDoc.defaultBranch || 'main';
     const currentPath = normalizeFilePath(req.query.path || '');
-    const branchDoc = await ensureBranch(repoDoc._id, branchName);
+    const branchDoc = await ensureBranch(repoDoc._id, branchName, req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
 
     const files = await File.find({ repository: repoDoc._id, branch: branchDoc._id }).sort({
@@ -244,7 +283,7 @@ exports.getFile = async (req, res) => {
     const repoDoc = await ensureRepo(req, res);
     if (!repoDoc) return;
 
-    const branchDoc = await ensureBranch(repoDoc._id, req.query.branch || repoDoc.defaultBranch || 'main');
+    const branchDoc = await ensureBranch(repoDoc._id, req.query.branch || repoDoc.defaultBranch || 'main', req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
 
     const filePath = normalizeFilePath(req.query.path);
@@ -268,7 +307,7 @@ exports.upsertFile = async (req, res) => {
     if (!repoDoc) return;
     if (!canWrite(req, repoDoc)) return res.status(403).json({ message: 'Write access required' });
 
-    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main');
+    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main', req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
     if (branchDoc.isProtected && req.body.force !== true) {
       return res.status(403).json({ message: 'Branch is protected' });
@@ -351,7 +390,7 @@ exports.deleteFile = async (req, res) => {
     if (!repoDoc) return;
     if (!canWrite(req, repoDoc)) return res.status(403).json({ message: 'Write access required' });
 
-    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main');
+    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main', req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
     if (branchDoc.isProtected && req.body.force !== true) {
       return res.status(403).json({ message: 'Branch is protected' });
@@ -389,13 +428,32 @@ exports.deleteFile = async (req, res) => {
   }
 };
 
+exports.getFileHistory = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+    const filePath = req.query.path || req.body.path;
+
+    const commits = await Commit.find({ 
+      repository: repoDoc._id,
+      'filesChanged.filename': filePath 
+    }).sort({ createdAt: -1 }).populate('author', 'username avatar');
+
+    // To provide "playback", we can attach some mock full content based on the patch, 
+    // or just return the commits and let frontend deal with it.
+    res.json(commits);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 exports.moveFile = async (req, res) => {
   try {
     const repoDoc = await ensureRepo(req, res);
     if (!repoDoc) return;
     if (!canWrite(req, repoDoc)) return res.status(403).json({ message: 'Write access required' });
 
-    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main');
+    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main', req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
 
     const fromPath = normalizeFilePath(req.body.from);
@@ -493,7 +551,7 @@ exports.downloadFile = async (req, res) => {
     const repoDoc = await ensureRepo(req, res);
     if (!repoDoc) return;
 
-    const branchDoc = await ensureBranch(repoDoc._id, req.query.branch || repoDoc.defaultBranch || 'main');
+    const branchDoc = await ensureBranch(repoDoc._id, req.query.branch || repoDoc.defaultBranch || 'main', req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
 
     const filePath = normalizeFilePath(req.query.path);
@@ -519,7 +577,7 @@ exports.downloadProject = async (req, res) => {
     const repoDoc = await ensureRepo(req, res);
     if (!repoDoc) return;
 
-    const branchDoc = await ensureBranch(repoDoc._id, req.query.branch || repoDoc.defaultBranch || 'main');
+    const branchDoc = await ensureBranch(repoDoc._id, req.query.branch || repoDoc.defaultBranch || 'main', req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
 
     const files = await File.find({
@@ -553,7 +611,7 @@ exports.uploadFiles = async (req, res) => {
     if (!repoDoc) return;
     if (!canWrite(req, repoDoc)) return res.status(403).json({ message: 'Write access required' });
 
-    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main');
+    const branchDoc = await ensureBranch(repoDoc._id, req.body.branch || repoDoc.defaultBranch || 'main', req.user._id);
     if (!branchDoc) return res.status(404).json({ message: 'Branch not found' });
 
     const { files } = req.body;
@@ -654,7 +712,7 @@ exports.createBranch = async (req, res) => {
     const { name, from = repoDoc.defaultBranch || 'main' } = req.body;
     if (!name) return res.status(400).json({ message: 'Branch name is required' });
 
-    const sourceBranch = await ensureBranch(repoDoc._id, from);
+    const sourceBranch = await ensureBranch(repoDoc._id, from, req.user._id);
     if (!sourceBranch) return res.status(404).json({ message: 'Source branch not found' });
 
     const branch = await Branch.create({
@@ -706,7 +764,7 @@ exports.deleteBranch = async (req, res) => {
     if (!repoDoc) return;
     if (!canWrite(req, repoDoc)) return res.status(403).json({ message: 'Write access required' });
 
-    const branch = await ensureBranch(repoDoc._id, req.params.branchName);
+    const branch = await ensureBranch(repoDoc._id, req.params.branchName, req.user._id);
     if (!branch) return res.status(404).json({ message: 'Branch not found' });
     if (branch.isDefault) return res.status(400).json({ message: 'Default branch cannot be deleted' });
     if (branch.isProtected && !branch.protectionRules.allowDeletions) {
@@ -737,7 +795,7 @@ exports.protectBranch = async (req, res) => {
     if (!repoDoc) return;
     if (!canWrite(req, repoDoc)) return res.status(403).json({ message: 'Admin access required' });
 
-    const branch = await ensureBranch(repoDoc._id, req.params.branchName);
+    const branch = await ensureBranch(repoDoc._id, req.params.branchName, req.user._id);
     if (!branch) return res.status(404).json({ message: 'Branch not found' });
 
     branch.isProtected = req.body.isProtected !== undefined ? req.body.isProtected : true;
@@ -766,7 +824,7 @@ exports.getCommits = async (req, res) => {
 
     const filter = { repository: repoDoc._id };
     if (req.query.branch) {
-      const branch = await ensureBranch(repoDoc._id, req.query.branch);
+      const branch = await ensureBranch(repoDoc._id, req.query.branch, req.user._id);
       if (!branch) return res.status(404).json({ message: 'Branch not found' });
       filter.branch = branch._id;
     }
@@ -846,8 +904,8 @@ exports.compareBranches = async (req, res) => {
     const repoDoc = await ensureRepo(req, res);
     if (!repoDoc) return;
 
-    const base = await ensureBranch(repoDoc._id, req.query.base || repoDoc.defaultBranch || 'main');
-    const head = await ensureBranch(repoDoc._id, req.query.head);
+    const base = await ensureBranch(repoDoc._id, req.query.base || repoDoc.defaultBranch || 'main', req.user._id);
+    const head = await ensureBranch(repoDoc._id, req.query.head, req.user._id);
     if (!base || !head) return res.status(404).json({ message: 'Branch not found' });
 
     const [baseCommits, headCommits] = await Promise.all([
@@ -1556,3 +1614,260 @@ exports.postChatMessage = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// GET WATCHERS
+exports.getWatchers = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+
+    const Watch = require('../models/Watch');
+    const watches = await Watch.find({ repository: repoDoc._id })
+      .populate('user', 'username name avatar bio')
+      .sort({ createdAt: -1 });
+
+    const users = watches.map((w) => w.user).filter(Boolean);
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET ARCHITECTURE GRAPH
+exports.getArchitectureGraph = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+
+    const defaultBranchName = repoDoc.defaultBranch || 'main';
+    const mainBranch = await Branch.findOne({ repository: repoDoc._id, name: defaultBranchName });
+    if (!mainBranch) return res.status(404).json({ message: 'Default branch not found' });
+
+    const files = await File.find({ repository: repoDoc._id, branch: mainBranch._id });
+
+    const nodes = [];
+    const links = [];
+
+    // Map by path for easy lookup
+    const pathMap = new Map();
+
+    files.forEach(file => {
+      // Create a node for every file and directory
+      const isDir = file.type === 'directory';
+      const node = {
+        id: file.path,
+        name: file.name,
+        val: isDir ? 3 : 1, // Directory nodes are larger
+        group: isDir ? 'directory' : 'file',
+        type: file.type
+      };
+      nodes.push(node);
+      pathMap.set(file.path, node);
+
+      // Create hierarchy links (parent folder -> file)
+      const parts = file.path.split('/');
+      if (parts.length > 1) {
+        const parentPath = parts.slice(0, -1).join('/');
+        links.push({
+          source: parentPath,
+          target: file.path,
+          type: 'hierarchy'
+        });
+      }
+    });
+
+    // Extract rudimentary imports for .js / .jsx files to show dependencies
+    files.forEach(file => {
+      if (file.type === 'file' && (file.path.endsWith('.js') || file.path.endsWith('.jsx'))) {
+        const content = file.content || '';
+        // Match import something from './relative/path'
+        const importRegex = /import\s+.*?\s+from\s+['"]([^'"]+)['"]/g;
+        let match;
+        while ((match = importRegex.exec(content)) !== null) {
+          const importPath = match[1];
+          if (importPath.startsWith('.')) {
+            // Very rudimentary relative path resolution
+            let currentDir = file.path.split('/').slice(0, -1).join('/');
+            let targetParts = importPath.split('/');
+            let resolvedParts = currentDir ? currentDir.split('/') : [];
+            
+            for (const p of targetParts) {
+              if (p === '.') continue;
+              if (p === '..') {
+                resolvedParts.pop();
+              } else {
+                resolvedParts.push(p);
+              }
+            }
+            let resolvedTarget = resolvedParts.join('/');
+            
+            // It could be .js, .jsx, or index.js
+            let finalTarget = null;
+            if (pathMap.has(resolvedTarget + '.js')) finalTarget = resolvedTarget + '.js';
+            else if (pathMap.has(resolvedTarget + '.jsx')) finalTarget = resolvedTarget + '.jsx';
+            else if (pathMap.has(resolvedTarget + '/index.js')) finalTarget = resolvedTarget + '/index.js';
+            else if (pathMap.has(resolvedTarget + '/index.jsx')) finalTarget = resolvedTarget + '/index.jsx';
+            else if (pathMap.has(resolvedTarget)) finalTarget = resolvedTarget; // if they provided extension
+            
+            if (finalTarget) {
+              links.push({
+                source: file.path,
+                target: finalTarget,
+                type: 'dependency'
+              });
+            }
+          }
+        }
+      }
+    });
+
+    res.json({ nodes, links });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const scoreToGrade = (score) => {
+  if (score >= 90) return 'A+';
+  if (score >= 80) return 'A';
+  if (score >= 70) return 'B+';
+  if (score >= 60) return 'B';
+  if (score >= 50) return 'C+';
+  if (score >= 40) return 'C';
+  return 'D';
+};
+
+exports.getHealth = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [openIssues, closedIssues, mergedPRs, totalPRs, recentCommits, openAlerts] = await Promise.all([
+      Issue.countDocuments({ repository: repoDoc._id, status: { $ne: 'closed' } }),
+      Issue.countDocuments({ repository: repoDoc._id, status: 'closed' }),
+      PullRequest.countDocuments({ repository: repoDoc._id, status: 'merged' }),
+      PullRequest.countDocuments({ repository: repoDoc._id }),
+      Commit.countDocuments({ repository: repoDoc._id, createdAt: { $gte: thirtyDaysAgo } }),
+      SecurityAlert.countDocuments({ repository: repoDoc._id, status: 'open' }),
+    ]);
+
+    const issueResolutionRate =
+      closedIssues + openIssues > 0 ? Math.round((closedIssues / (closedIssues + openIssues)) * 100) : 100;
+    const prMergeRate = totalPRs > 0 ? Math.round((mergedPRs / totalPRs) * 100) : 100;
+    const activityScore = Math.min(100, recentCommits * 5);
+    const securityPenalty = Math.min(30, openAlerts * 5);
+    const score = Math.max(
+      0,
+      Math.round((issueResolutionRate + prMergeRate + activityScore) / 3) - securityPenalty
+    );
+
+    res.json({
+      score,
+      grade: scoreToGrade(score),
+      metrics: {
+        issueResolutionRate,
+        prMergeRate,
+        activityScore,
+        openSecurityAlerts: openAlerts,
+        recentCommits,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getDependencyHealth = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+
+    const branchDoc = await ensureBranch(repoDoc._id, repoDoc.defaultBranch || 'main', req.user._id);
+    if (!branchDoc) {
+      return res.json({ overallRiskScore: 0, dependencies: [] });
+    }
+
+    const packageFile = await File.findOne({
+      repository: repoDoc._id,
+      branch: branchDoc._id,
+      path: 'package.json',
+      type: 'file',
+    });
+
+    let dependencies = [];
+    if (packageFile?.content) {
+      try {
+        const pkg = JSON.parse(packageFile.content);
+        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+        dependencies = Object.entries(deps || {}).map(([name, version]) => {
+          const cleanVersion = String(version).replace(/^[\^~>=<]*/, '');
+          const isOld = cleanVersion.startsWith('0.') || cleanVersion.startsWith('1.');
+          const riskScore = isOld ? 55 : 15;
+          return {
+            name,
+            version: cleanVersion,
+            riskScore,
+            status: riskScore > 50 ? 'outdated' : 'healthy',
+            cve: riskScore > 70 ? null : null,
+          };
+        });
+      } catch {
+        dependencies = [];
+      }
+    }
+
+    const overallRiskScore =
+      dependencies.length > 0
+        ? Math.round(dependencies.reduce((sum, dep) => sum + dep.riskScore, 0) / dependencies.length)
+        : 0;
+
+    res.json({ overallRiskScore, dependencies });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getSnippets = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+
+    const snippets = await Snippet.find({ repository: repoDoc._id })
+      .populate('author', 'username name avatar')
+      .sort({ updatedAt: -1 });
+
+    res.json(snippets);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.createSnippet = async (req, res) => {
+  try {
+    const repoDoc = await ensureRepo(req, res);
+    if (!repoDoc) return;
+    if (!canWrite(req, repoDoc)) return res.status(403).json({ message: 'Write access required' });
+
+    const { title, description, code, language } = req.body;
+    if (!title?.trim()) return res.status(400).json({ message: 'Title is required' });
+    if (!code?.trim()) return res.status(400).json({ message: 'Code is required' });
+
+    const snippet = await Snippet.create({
+      repository: repoDoc._id,
+      title: title.trim(),
+      description: description || '',
+      code,
+      language: language || 'javascript',
+      author: req.user._id,
+    });
+
+    const populated = await Snippet.findById(snippet._id).populate('author', 'username name avatar');
+    res.status(201).json(populated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+

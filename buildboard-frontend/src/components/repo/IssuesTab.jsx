@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../lib/api';
 import { GlassCard, NeonButton, CyberInput, CyberBadge } from '../ui';
-import { 
-  AlertCircle, CheckCircle2, MessageSquare, Plus, X, User as UserIcon, AlertTriangle
+import {
+  AlertCircle, CheckCircle2, MessageSquare, Plus, X, User as UserIcon, AlertTriangle, DollarSign
 } from 'lucide-react';
 import { listVariants, itemVariants } from '../../utils/animations';
 
@@ -108,6 +108,82 @@ export const CreateIssueModal = ({ owner, repo, defaultTitle = '', defaultDescri
   );
 };
 
+export const FundIssueModal = ({ issue, owner, repo, onClose, onSuccess }) => {
+  const [amount, setAmount] = useState(issue.bountyAmount || 0);
+  const queryClient = useQueryClient();
+  const [isFunding, setIsFunding] = useState(false);
+
+  const handleFund = async () => {
+    setIsFunding(true);
+    try {
+      await api.put(`/issues/${owner}/${repo}/${issue.number}`, { bountyAmount: Number(amount) });
+      queryClient.invalidateQueries({ queryKey: ['repo-issues', owner, repo] });
+      onSuccess();
+      onClose();
+    } catch (err) {
+      alert('Failed to set bounty');
+    } finally {
+      setIsFunding(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-md"
+      >
+        <GlassCard className="p-0 overflow-hidden border-t-[var(--brand-success)] shadow-2xl shadow-[var(--brand-success)]/10">
+          <div className="border-b border-[var(--glass-border)] px-6 py-4 flex items-center justify-between bg-black/40">
+            <h2 className="text-xl font-display font-bold flex items-center gap-2">
+              <DollarSign className="text-[var(--brand-success)]" />
+              FUND_BOUNTY
+            </h2>
+            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="p-6 space-y-5">
+            <p className="text-sm text-[var(--text-muted)]">Attach a monetary bounty to incentivize developers to solve this issue: <strong className="text-white">{issue.title}</strong></p>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={16} />
+              <input
+                type="number"
+                min="0"
+                className="w-full bg-[var(--bg-main)]/50 border border-[var(--glass-border)] rounded-lg p-3 pl-9 text-lg font-mono text-[var(--brand-success)] focus:border-[var(--brand-success)] focus:ring-1 focus:ring-[var(--brand-success)]/50 outline-none transition-all"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div className="text-xs text-[var(--brand-warning)] flex items-center gap-1">
+               <AlertTriangle size={12} /> Powered by Stripe (Simulated)
+            </div>
+          </div>
+          
+          <div className="border-t border-[var(--glass-border)] px-6 py-4 flex justify-end gap-3 bg-black/20">
+            <NeonButton variant="ghost" onClick={onClose}>
+              CANCEL
+            </NeonButton>
+            <NeonButton
+              variant="primary"
+              className="bg-[var(--brand-success)]/20 text-[var(--brand-success)] border-[var(--brand-success)] hover:bg-[var(--brand-success)]/40"
+              onClick={handleFund}
+              disabled={isFunding || !amount}
+            >
+              {isFunding ? 'PROCESSING...' : 'FUND_ISSUE'}
+            </NeonButton>
+          </div>
+        </GlassCard>
+      </motion.div>
+    </div>
+  );
+};
+
 export const IssuesTab = ({ owner, repo, issueModalOpen, setIssueModalOpen, selectedFileForIssue }) => {
   const queryClient = useQueryClient();
 
@@ -118,6 +194,15 @@ export const IssuesTab = ({ owner, repo, issueModalOpen, setIssueModalOpen, sele
       return data;
     },
   });
+
+  const [bountyIssue, setBountyIssue] = useState(null);
+
+  const handleSetBounty = (e, issue) => {
+    e.stopPropagation();
+    setBountyIssue(issue);
+  };
+
+  const totalBounty = data?.issues?.reduce((acc, issue) => acc + (issue.bountyAmount || 0), 0) || 0;
 
   if (isLoading) {
     return (
@@ -142,6 +227,12 @@ export const IssuesTab = ({ owner, repo, issueModalOpen, setIssueModalOpen, sele
             <CheckCircle2 size={18} />
             {data?.closedCount || 0} Closed
           </div>
+          {totalBounty > 0 && (
+            <div className="flex items-center gap-2 text-[var(--brand-success)] font-mono font-bold cursor-help" title="Total Active Bounties">
+              <DollarSign size={18} />
+              {totalBounty} Active Bounties
+            </div>
+          )}
         </div>
         
         <NeonButton variant="primary" onClick={() => setIssueModalOpen(true)} className="py-1.5 px-4 text-xs flex items-center gap-1.5">
@@ -185,6 +276,21 @@ export const IssuesTab = ({ owner, repo, issueModalOpen, setIssueModalOpen, sele
                             ACTION_REQUIRED
                           </CyberBadge>
                         )}
+
+                        <div className="ml-auto flex items-center gap-2">
+                          {issue.bountyAmount > 0 && (
+                            <CyberBadge variant="success" size="sm" className="flex items-center gap-1 font-mono text-[var(--brand-success)] border-[var(--brand-success)] shadow-[0_0_10px_var(--brand-success)]">
+                              <DollarSign size={12} />
+                              {issue.bountyAmount}
+                            </CyberBadge>
+                          )}
+                          <button 
+                            onClick={(e) => handleSetBounty(e, issue)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-xs font-mono text-[var(--brand-primary)] hover:underline border border-[var(--brand-primary)]/30 rounded px-2 py-0.5"
+                          >
+                            Set Bounty
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-mono text-[var(--text-muted)]">
@@ -198,7 +304,7 @@ export const IssuesTab = ({ owner, repo, issueModalOpen, setIssueModalOpen, sele
                         )}
                         
                         {issue.commentCount > 0 && (
-                          <span className="flex items-center gap-1.5 ml-auto">
+                          <span className="flex items-center gap-1.5">
                             <MessageSquare size={12} />
                             {issue.commentCount}
                           </span>
@@ -230,6 +336,17 @@ export const IssuesTab = ({ owner, repo, issueModalOpen, setIssueModalOpen, sele
             defaultDescription={selectedFileForIssue ? `Please review and update the file: \`${selectedFileForIssue}\`.\n\nChanges requested by reviewer.` : ''}
             onClose={() => setIssueModalOpen(false)}
             onSuccess={() => queryClient.invalidateQueries({ queryKey: ['repo-issues', owner, repo] })}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {bountyIssue && (
+          <FundIssueModal
+            owner={owner}
+            repo={repo}
+            issue={bountyIssue}
+            onClose={() => setBountyIssue(null)}
+            onSuccess={() => {}}
           />
         )}
       </AnimatePresence>

@@ -114,7 +114,7 @@ const Login = () => {
               />
               {errors.password && <p className="mt-1 text-sm text-[var(--brand-danger)]">{errors.password.message}</p>}
               <div className="flex justify-end mt-1">
-                <a href="#" className="text-xs text-[var(--brand-primary)] hover:underline">Forgot password?</a>
+                <Link to="/forgot-password" className="text-xs text-[var(--brand-primary)] hover:underline">Forgot password?</Link>
               </div>
             </div>
             

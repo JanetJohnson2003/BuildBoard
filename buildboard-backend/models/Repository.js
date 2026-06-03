@@ -173,6 +173,23 @@ const repositorySchema = new mongoose.Schema(
         publishedAt: { type: Date, default: Date.now },
       },
     ],
+    subscriptions: {
+      enabled: { type: Boolean, default: false },
+      tiers: [
+        {
+          name: String,
+          price: Number,
+          benefits: [String]
+        }
+      ],
+      subscribers: [
+        {
+          user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          tierName: String,
+          subscribedAt: { type: Date, default: Date.now }
+        }
+      ]
+    },
     settings: {
       issuesEnabled: { type: Boolean, default: true },
       projectsEnabled: { type: Boolean, default: true },

@@ -46,6 +46,11 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  const sendOtp = async (email) => {
+    const { data } = await api.post('/auth/send-otp', { email });
+    return data;
+  };
+
   const logout = async () => {
     try {
       await api.post('/auth/logout');
@@ -60,7 +65,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, setUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, sendOtp, logout, setUser }}>
       {!loading && children}
     </AuthContext.Provider>
   );

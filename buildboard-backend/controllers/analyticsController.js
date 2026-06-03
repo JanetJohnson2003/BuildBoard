@@ -134,8 +134,12 @@ exports.getAdminAnalytics = async (req, res) => {
 exports.getRepoAnalytics = async (req, res) => {
   try {
     const { owner, repo } = req.params;
-    const repoDoc = await Repository.findOne({ slug: repo }).populate('owner', 'username');
-    if (!repoDoc || repoDoc.owner.username !== owner) {
+    
+    const ownerDoc = await User.findOne({ username: owner });
+    if (!ownerDoc) return res.status(404).json({ message: 'Owner not found' });
+    
+    const repoDoc = await Repository.findOne({ owner: ownerDoc._id, slug: repo }).populate('owner', 'username');
+    if (!repoDoc) {
       return res.status(404).json({ message: 'Repository not found' });
     }
 

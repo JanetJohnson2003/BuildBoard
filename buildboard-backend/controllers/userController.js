@@ -258,3 +258,54 @@ exports.getFollowing = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+exports.getTrendOracle = async (req, res) => {
+  try {
+    const { username } = req.params;
+    const user = await User.findOne({ username });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ message: 'GEMINI_API_KEY is not configured on the server.' });
+    }
+
+    const repos = await Repository.find({ owner: user._id }).select('name language description topics visibility createdAt').limit(20);
+    const activities = await ActivityLog.find({ user: user._id }).select('title type createdAt').sort({ createdAt: -1 }).limit(50);
+
+    const repoData = repos.map(r => `${r.name} (${r.language || 'Mixed'}) - ${r.description}`).join('\n');
+    const activityData = activities.map(a => `${a.type}: ${a.title}`).join('\n');
+
+    const prompt = `You are an elite Developer Trend Oracle AI. Analyze the following data about the software developer '${username}'.
+Repositories:
+${repoData || 'No public repositories.'}
+
+Recent Activity:
+${activityData || 'No recent activity.'}
+
+Based on this data, predict their past trajectory, current focus, and what their future holds in tech.
+Format your output exactly as valid JSON with no markdown wrapping, matching this schema:
+{
+  "pastTrend": { "title": "string", "description": "string" },
+  "currentTrend": { "title": "string", "description": "string" },
+  "futurePrediction": { "title": "string", "description": "string" },
+  "summary": "string"
+}`;
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    
+    let jsonStr = result.response.text().trim();
+    if (jsonStr.startsWith('\`\`\`json')) jsonStr = jsonStr.replace(/^\`\`\`json\n?/, '');
+    if (jsonStr.startsWith('\`\`\`')) jsonStr = jsonStr.replace(/^\`\`\`\n?/, '');
+    if (jsonStr.endsWith('\`\`\`')) jsonStr = jsonStr.replace(/\n?\`\`\`$/, '');
+
+    res.json(JSON.parse(jsonStr));
+
+  } catch (error) {
+    console.error('Trend Oracle Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

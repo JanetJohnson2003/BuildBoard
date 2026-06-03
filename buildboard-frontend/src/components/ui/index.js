@@ -11,3 +11,5 @@ export { CyberSkeleton } from './CyberSkeleton';
 export { CyberTooltip } from './CyberTooltip';
 export { HolographicLoader } from './HolographicLoader';
 export { AnimatedCounter } from './AnimatedCounter';
+export { AiChatWidget } from './AiChatWidget';
+export { default as SystemBroadcast } from './SystemBroadcast';

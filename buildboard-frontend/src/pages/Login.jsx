@@ -2,7 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { GlassCard, NeonButton, CyberInput, CyberToast } from '../components/ui'
+import { GlassCard, NeonButton, CyberInput } from '../components/ui'
 import { ParticleField, AuroraBackground } from '../components/effects'
 import { Terminal, Lock, Mail, ArrowRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -49,22 +49,8 @@ function Login() {
     try {
       console.log('🔐 Initiating secure handshake...')
 
-      const response = await axios.post(
-        'http://localhost:5000/api/auth/login',
-        {
-          email: formData.email,
-          password: formData.password
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 10000
-        }
-      )
-
-      console.log('✅ Handshake accepted:', response.data)
-
-      // Save token and user to context/localStorage
-      login(response.data.user, response.data.token)
+      // Use login from AuthContext
+      await login(formData.email, formData.password)
       
       // Redirect to dashboard
       navigate('/dashboard')
@@ -75,10 +61,10 @@ function Login() {
         setError(err.response.data.message)
       } else if (err.response?.status === 401) {
         setError('Invalid credentials. Access denied.')
-      } else if (err.message === 'Network Error') {
+      } else if (err.message === 'Network Error' || err.code === 'ERR_NETWORK') {
         setError('Nexus offline. Establish connection to central server.')
       } else {
-        setError(err.response?.data?.message || 'Authentication failed. Please retry.')
+        setError(err.response?.data?.message || err.message || 'Authentication failed. Please retry.')
       }
       
       setLoading(false)
@@ -130,16 +116,23 @@ function Login() {
                 autoFocus
               />
 
-              <CyberInput
-                icon={Lock}
-                label="Access Key"
-                type="password"
-                name="password"
-                placeholder="••••••••••••"
-                value={formData.password}
-                onChange={handleChange}
-                disabled={loading}
-              />
+              <div>
+                <CyberInput
+                  icon={Lock}
+                  label="Access Key"
+                  type="password"
+                  name="password"
+                  placeholder="••••••••••••"
+                  value={formData.password}
+                  onChange={handleChange}
+                  disabled={loading}
+                />
+                <div className="flex justify-end mt-2">
+                  <Link to="/forgot-password" className="text-xs text-[var(--brand-primary)] hover:text-[var(--brand-purple)] transition-colors font-mono">
+                    Forgot Access Key?
+                  </Link>
+                </div>
+              </div>
             </div>
 
             {error && (

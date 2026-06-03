@@ -63,6 +63,8 @@ const Profile = () => {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: '', bio: '', location: '', website: '', avatar: '' });
+  const [oracleData, setOracleData] = useState(null);
+  const [isConsulting, setIsConsulting] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['my-profile'],
@@ -111,6 +113,19 @@ const Profile = () => {
       avatar: displayUser?.avatar || '',
     });
     setEditing(true);
+  };
+
+  const handleConsultOracle = async () => {
+    if (!displayUser?.username) return;
+    setIsConsulting(true);
+    try {
+      const { data } = await api.get(`/users/${displayUser.username}/trend-oracle`);
+      setOracleData(data);
+    } catch (e) {
+      alert('Failed to consult oracle.');
+    } finally {
+      setIsConsulting(false);
+    }
   };
 
   const handleAvatarChange = (e) => {
@@ -345,6 +360,61 @@ const Profile = () => {
                 <CyberBadge variant="neutral" size="sm">T-365_DAYS</CyberBadge>
               </div>
               <ContributionGraph days={dashboard?.contributionGraph || []} />
+            </GlassCard>
+          </motion.div>
+
+          {/* AI Trend Oracle */}
+          <motion.div variants={itemVariants}>
+            <GlassCard className="p-6 border-t-4 border-t-[var(--brand-purple)]">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="font-display font-bold text-lg flex items-center gap-2">
+                  <Star size={18} className="text-[var(--brand-purple)]" /> AI Trend Oracle
+                </h2>
+                <NeonButton 
+                  variant="purple" 
+                  size="sm" 
+                  onClick={handleConsultOracle} 
+                  disabled={isConsulting}
+                  className="py-1.5 px-3 text-xs flex items-center gap-2"
+                >
+                  {isConsulting ? 'ANALYZING TRAJECTORY...' : 'CONSULT ORACLE'}
+                </NeonButton>
+              </div>
+
+              {oracleData ? (
+                <div className="space-y-4">
+                  <p className="text-sm font-mono text-[var(--text-muted)] italic mb-6">"{oracleData.summary}"</p>
+                  
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="bg-black/40 border border-[var(--glass-border)] rounded-lg p-4 relative overflow-hidden group">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#4b5563]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="text-xs font-mono text-gray-400 mb-1 uppercase">Past Trend</div>
+                      <div className="font-bold text-gray-200 mb-2">{oracleData.pastTrend.title}</div>
+                      <p className="text-xs text-gray-500">{oracleData.pastTrend.description}</p>
+                    </div>
+
+                    <div className="bg-[var(--brand-primary)]/10 border border-[var(--brand-primary)]/30 rounded-lg p-4 relative overflow-hidden group shadow-[0_0_15px_rgba(0,212,255,0.1)]">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[var(--brand-primary)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="text-xs font-mono text-[var(--brand-primary)] mb-1 uppercase">Current Focus</div>
+                      <div className="font-bold text-white mb-2">{oracleData.currentTrend.title}</div>
+                      <p className="text-xs text-gray-300">{oracleData.currentTrend.description}</p>
+                    </div>
+
+                    <div className="bg-[var(--brand-purple)]/10 border border-[var(--brand-purple)]/30 rounded-lg p-4 relative overflow-hidden group shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[var(--brand-purple)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="text-xs font-mono text-[var(--brand-purple)] mb-1 uppercase flex items-center gap-1">
+                         <Activity size={12} /> Predicted Future
+                      </div>
+                      <div className="font-bold text-white mb-2">{oracleData.futurePrediction.title}</div>
+                      <p className="text-xs text-gray-300">{oracleData.futurePrediction.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-[var(--text-muted)] font-mono text-sm border border-dashed border-[var(--glass-border)] rounded-lg">
+                  Initialize the Oracle to predict operational trajectory based on activity telemetry.
+                </div>
+              )}
             </GlassCard>
           </motion.div>
 

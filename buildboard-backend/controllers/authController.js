@@ -17,16 +17,116 @@ const generateTokens = (userId) => {
   return { accessToken, refreshToken };
 };
 
+const OTP = require('../models/OTP');
+const PlatformSettings = require('../models/PlatformSettings');
+const nodemailer = require('nodemailer');
+
+// Helper to create nodemailer transporter (using Ethereal for testing if no SMTP is provided)
+const createTransporter = async () => {
+  if (process.env.SMTP_HOST) {
+    if (process.env.SMTP_HOST.includes('gmail')) {
+      return nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    }
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT || 587,
+      secure: process.env.SMTP_PORT == 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
+  
+  // Create a test account on Ethereal if no SMTP credentials are provided
+  const testAccount = await nodemailer.createTestAccount();
+  return nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false,
+    auth: {
+      user: testAccount.user,
+      pass: testAccount.pass,
+    },
+  });
+};
+
+// SEND OTP
+exports.sendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    // Generate a 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store in DB (upsert if exists)
+    await OTP.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      { otp: otpCode, createdAt: Date.now() },
+      { upsert: true, new: true }
+    );
+
+    // Send email
+    const transporter = await createTransporter();
+    const info = await transporter.sendMail({
+      from: '"Nexus Auth" <noreply@nexus.dev>',
+      to: email,
+      subject: 'Your Nexus Identity OTP',
+      text: `Your One-Time Password is: ${otpCode}. It will expire in 5 minutes.`,
+      html: `<b>Your One-Time Password is: <span style="font-size:24px;">${otpCode}</span></b><br>It will expire in 5 minutes.`,
+    });
+
+    const isDev = !process.env.SMTP_HOST;
+    let devOtp = null;
+    let previewUrl = null;
+
+    if (isDev) {
+      previewUrl = nodemailer.getTestMessageUrl(info);
+      devOtp = otpCode;
+      console.log('OTP Email sent! Preview URL: %s', previewUrl);
+    }
+
+    res.status(200).json({ 
+      message: 'OTP sent successfully',
+      devOtp,
+      previewUrl
+    });
+  } catch (error) {
+    console.error('OTP Send Error:', error);
+    res.status(500).json({ message: 'Failed to send OTP' });
+  }
+};
+
+
 // REGISTER
 exports.register = async (req, res) => {
   try {
-    const { username, name, email, password, role } = req.body;
+    const { username, name, email, password, role, otp } = req.body;
 
-    if (!username || !name || !email || !password) {
+    if (!username || !name || !email || !password || !otp) {
       return res.status(400).json({
-        message: 'Username, name, email, and password are required',
+        message: 'Username, name, email, password, and OTP are required',
       });
     }
+
+    // Verify OTP
+    const otpRecord = await OTP.findOne({ email: email.toLowerCase() });
+    if (!otpRecord) {
+      return res.status(400).json({ message: 'OTP has expired or was not requested' });
+    }
+    if (otpRecord.otp !== otp) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    // OTP is valid, clear it
+    await OTP.deleteOne({ email: email.toLowerCase() });
 
     // Validate role
     const validRoles = ['developer', 'reviewer', 'project_manager', 'admin'];
@@ -102,8 +202,30 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    const platformSettings = await PlatformSettings.findOne({ key: 'global' });
+    if (platformSettings?.loginLockdown && user.role !== 'admin') {
+      return res.status(503).json({
+        message: platformSettings.lockdownMessage || 'Platform is in lockdown',
+        code: 'PLATFORM_LOCKDOWN',
+      });
+    }
+
     if (user.isBanned) {
       return res.status(403).json({ message: 'Your account has been suspended' });
+    }
+
+    if (user.loginLocked) {
+      if (user.loginLockedUntil && user.loginLockedUntil < new Date()) {
+        user.loginLocked = false;
+        user.loginLockReason = '';
+        user.loginLockedUntil = null;
+        await user.save();
+      } else {
+        return res.status(403).json({
+          message: user.loginLockReason || 'Login access has been revoked by platform overseer',
+          code: 'LOGIN_LOCKED',
+        });
+      }
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -162,6 +284,12 @@ exports.refreshToken = async (req, res) => {
     const user = await User.findById(decoded.id);
     if (!user || user.refreshToken !== refreshToken) {
       return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+
+    if (user.isBanned || user.loginLocked) {
+      user.refreshToken = null;
+      await user.save();
+      return res.status(403).json({ message: 'Session revoked. Please sign in again.' });
     }
 
     // Generate new tokens
@@ -251,9 +379,22 @@ exports.requestPasswordReset = async (req, res) => {
     user.passwordResetExpires = new Date(Date.now() + 1000 * 60 * 30);
     await user.save();
 
+    // Send email
+    const transporter = await createTransporter();
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${user.passwordResetToken}`;
+    
+    const info = await transporter.sendMail({
+      from: '"Nexus Auth" <noreply@nexus.dev>',
+      to: email,
+      subject: 'Your Nexus Identity Password Reset',
+      text: `Click the following link to reset your password: ${resetUrl}`,
+      html: `<b>Password Reset</b><br>Click <a href="${resetUrl}">here</a> to reset your password. It will expire in 30 minutes.`,
+    });
+
+    console.log('Password Reset Email sent! Preview URL: %s', nodemailer.getTestMessageUrl(info));
+
     res.json({
-      message: 'Password reset requested',
-      resetToken: process.env.NODE_ENV === 'production' ? undefined : user.passwordResetToken,
+      message: 'If that email exists, a reset link has been generated',
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

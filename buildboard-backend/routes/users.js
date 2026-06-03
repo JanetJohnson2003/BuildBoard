@@ -11,5 +11,6 @@ router.get('/:username/followers', auth, userController.getFollowers);
 router.get('/:username/following', auth, userController.getFollowing);
 router.post('/:username/follow', auth, userController.toggleFollow);
 router.put('/profile/update', auth, userController.updateProfile);
+router.get('/:username/trend-oracle', auth, userController.getTrendOracle);
 
 module.exports = router;

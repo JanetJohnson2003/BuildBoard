@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "BuildBoard+ - GitHub-Inspired Developer Collaboration Platform API",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -22,6 +23,7 @@
     "mongoose": "^9.3.2",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
+    "nodemailer": "^8.0.10",
     "slugify": "^1.6.9",
     "socket.io": "^4.8.3",
     "uuid": "^11.1.0"

@@ -8,5 +8,6 @@ router.get('/organizations', auth, platformController.getOrganizations);
 router.post('/organizations', auth, platformController.createOrganization);
 router.get('/organizations/:org', auth, platformController.getOrganization);
 router.post('/organizations/:org/teams', auth, platformController.createTeam);
+router.post('/execute', auth, platformController.executeCode);
 
 module.exports = router;

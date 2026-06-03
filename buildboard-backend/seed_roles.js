@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 async function seed() {
-  await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/buildboard');
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/buildboard');
   const salt = await bcrypt.genSalt(10);
   const password = await bcrypt.hash('password123', salt);
   

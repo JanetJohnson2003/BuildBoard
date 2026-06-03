@@ -65,6 +65,8 @@ app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/platform', require('./routes/platform'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/overseer', require('./routes/overseer'));
+app.use('/api/godmode', require('./routes/godmode'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/versions', require('./routes/versions'));
 app.use('/api/feedback', require('./routes/feedback'));

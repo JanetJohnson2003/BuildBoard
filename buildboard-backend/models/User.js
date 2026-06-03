@@ -142,6 +142,31 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    loginLocked: {
+      type: Boolean,
+      default: false,
+    },
+    loginLockReason: {
+      type: String,
+      default: '',
+    },
+    loginLockedAt: {
+      type: Date,
+      default: null,
+    },
+    loginLockedUntil: {
+      type: Date,
+      default: null,
+    },
+    loginLockedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    mustResetPassword: {
+      type: Boolean,
+      default: false,
+    },
     warnings: [
       {
         reason: String,

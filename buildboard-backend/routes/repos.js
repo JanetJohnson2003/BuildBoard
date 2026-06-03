@@ -16,12 +16,17 @@ router.delete('/:owner/:repo', auth, repoController.deleteRepo);
 
 // Star, Fork, Collaborators
 router.post('/:owner/:repo/star', auth, repoController.toggleStar);
+router.get('/:owner/:repo/stargazers', auth, repoController.getStargazers);
 router.post('/:owner/:repo/fork', auth, repoController.forkRepo);
+router.get('/:owner/:repo/forks', auth, repoController.getForks);
+router.get('/:owner/:repo/watchers', auth, featureController.getWatchers);
 router.post('/:owner/:repo/collaborators', auth, repoController.addCollaborator);
 
 // Repository file system
+router.get('/:owner/:repo/architecture', auth, featureController.getArchitectureGraph);
 router.get('/:owner/:repo/files', auth, featureController.getFiles);
 router.get('/:owner/:repo/file', auth, featureController.getFile);
+router.get('/:owner/:repo/file/history', auth, featureController.getFileHistory);
 router.get('/:owner/:repo/file/download', auth, featureController.downloadFile);
 router.get('/:owner/:repo/download', auth, featureController.downloadProject);
 router.put('/:owner/:repo/file', auth, featureController.upsertFile);
@@ -71,9 +76,15 @@ router.get('/:owner/:repo/workflow-runs', auth, featureController.getWorkflowRun
 router.get('/:owner/:repo/workflows/:workflowId/runs', auth, featureController.getWorkflowRuns);
 router.post('/:owner/:repo/workflows/:workflowId/runs', auth, featureController.runWorkflow);
 
-// Security and insights
+// Security, insights, and health
 router.get('/:owner/:repo/security', auth, featureController.getSecurityDashboard);
 router.get('/:owner/:repo/insights', auth, featureController.getInsights);
+router.get('/:owner/:repo/health', auth, featureController.getHealth);
+router.get('/:owner/:repo/health/dependencies', auth, featureController.getDependencyHealth);
+
+// Snippets
+router.get('/:owner/:repo/snippets', auth, featureController.getSnippets);
+router.post('/:owner/:repo/snippets', auth, featureController.createSnippet);
 
 // Chat
 router.get('/:owner/:repo/chat', auth, featureController.getChatMessages);

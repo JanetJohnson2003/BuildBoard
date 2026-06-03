@@ -1,22 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
 import { GlassCard, NeonButton, CyberBadge, CyberSkeleton } from '../components/ui';
 import { CodeTab } from '../components/repo/CodeTab';
 import { IssuesTab } from '../components/repo/IssuesTab';
 import { 
-  PullRequestCards, ActionsTab, WikiTab, InsightsTab, 
-  SecurityTab, DiscussionsTab, ReleasesTab, AiTab 
+  PullRequestCards, ActionsTab, WikiTab, SecurityTab, 
+  InsightsTab, ReleasesTab, DiscussionsTab, SnippetsTab, AiTab, WalkthroughsTab, SponsorshipTab, RiskRadarTab, GitGalaxyTab, SecretsTab
 } from '../components/repo/OtherTabs';
 import { 
   Book, Lock, Eye, GitFork, Star, Archive, 
   Terminal, ShieldCheck, Box, Settings
 } from 'lucide-react';
 import { pageVariants } from '../utils/animations';
+import { SocialListModal } from '../components/repo/SocialListModal';
 
-const tabs = ['Code', 'Issues', 'Pull Requests', 'Actions', 'Projects', 'Wiki', 'Security', 'Insights', 'Releases', 'Packages', 'Discussions', 'AI'];
+const tabs = ['Code', 'Issues', 'Pull Requests', 'Actions', 'Projects', 'Wiki', 'Security', 'Insights', 'Releases', 'Packages', 'Discussions', 'Snippets', 'Walkthroughs', 'Sponsorship', 'Risk Radar', 'Git Galaxy', 'AI', 'Secrets'];
 
 const normalizeTab = (value) => tabs.find((tab) => tab.toLowerCase().replaceAll(' ', '-') === value) || 'Code';
 const tabToParam = (tab) => tab.toLowerCase().replaceAll(' ', '-');
@@ -40,12 +41,67 @@ const RepositoryPage = () => {
   const { owner, repo, repoQuery } = useRepoQuery();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = normalizeTab(searchParams.get('tab') || 'code');
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const healthQuery = useQuery({
+    queryKey: ['repo-health', owner, repo],
+    queryFn: async () => {
+      const { data } = await api.get(`/repos/${owner}/${repo}/health`);
+      return data;
+    },
+    enabled: !!owner && !!repo
+  });
   
   // Shared state for marking files for change
   const [issueModalOpen, setIssueModalOpen] = useState(false);
   const [selectedFileForIssue, setSelectedFileForIssue] = useState('');
+  const [socialModal, setSocialModal] = useState({ isOpen: false, type: null });
+  const [storyModalOpen, setStoryModalOpen] = useState(false);
+  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
 
   const repoData = repoQuery.data;
+
+  // Mutations for Watch, Fork, Star
+  const toggleStar = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/repos/${owner}/${repo}/star`);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['repo', owner, repo], (old) => {
+        if (!old) return old;
+        return { ...old, isStarred: data.starred, starCount: data.starCount };
+      });
+    }
+  });
+
+  const toggleWatch = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/repos/${owner}/${repo}/watch`);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['repo', owner, repo], (old) => {
+        if (!old) return old;
+        return { ...old, isWatched: data.watching, watcherCount: data.watcherCount };
+      });
+    }
+  });
+
+  const forkRepo = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/repos/${owner}/${repo}/fork`);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['repo', owner, repo]);
+      navigate(`/${data.owner.username}/${data.slug}`);
+    },
+    onError: (error) => {
+      alert(error.response?.data?.message || 'Failed to fork repository');
+    }
+  });
 
   const tabContent = useMemo(() => {
     if (!repoData) return null;
@@ -66,8 +122,20 @@ const RepositoryPage = () => {
         return <ReleasesTab owner={owner} repo={repo} />;
       case 'Discussions':
         return <DiscussionsTab owner={owner} repo={repo} />;
+      case 'Snippets':
+        return <SnippetsTab owner={owner} repo={repo} />;
+      case 'Walkthroughs':
+        return <WalkthroughsTab owner={owner} repo={repo} />;
+      case 'Sponsorship':
+        return <SponsorshipTab owner={owner} repo={repo} />;
+      case 'Risk Radar':
+        return <RiskRadarTab owner={owner} repo={repo} />;
+      case 'Git Galaxy':
+        return <GitGalaxyTab owner={owner} repo={repo} />;
       case 'AI':
         return <AiTab owner={owner} repo={repo} />;
+      case 'Secrets':
+        return <SecretsTab owner={owner} repo={repo} />;
       case 'Projects':
         return (
           <GlassCard className="p-12 text-center flex flex-col items-center justify-center border-t-[var(--brand-primary)]">
@@ -172,27 +240,92 @@ const RepositoryPage = () => {
                   {repoData.isTemplate && (
                     <CyberBadge variant="purple" size="md">TEMPLATE</CyberBadge>
                   )}
+                  {healthQuery.data && (
+                    <CyberBadge 
+                      variant={healthQuery.data.grade.startsWith('A') ? 'success' : healthQuery.data.grade.startsWith('B') ? 'warning' : 'danger'} 
+                      size="md" 
+                      className="ml-2 font-bold flex items-center gap-1 shadow-[0_0_10px_currentColor] border-currentColor text-currentColor"
+                    >
+                      Health: {healthQuery.data.grade}
+                    </CyberBadge>
+                  )}
                 </div>
               </div>
               
-              <p className="text-sm md:text-base font-mono text-[var(--text-muted)] max-w-3xl leading-relaxed">
+              <p className="text-sm md:text-base font-mono text-[var(--text-muted)] max-w-3xl leading-relaxed mb-6">
                 {repoData.description || 'No operational description provided.'}
               </p>
+
+              {/* Repo Code Stories */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono text-[var(--brand-purple)] font-bold tracking-widest uppercase">Repo Stories</span>
+                <div className="flex gap-3">
+                   {[1, 2, 3].map((idx) => (
+                     <div 
+                       key={idx} 
+                       className="w-10 h-10 rounded-full border-2 border-[var(--brand-purple)] p-[2px] cursor-pointer hover:scale-110 transition-transform shadow-[0_0_10px_var(--brand-purple)]"
+                       onClick={() => {
+                         setCurrentStoryIndex(idx - 1);
+                         setStoryModalOpen(true);
+                       }}
+                     >
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=Story${idx}&backgroundColor=111`} alt="Story" className="w-full h-full rounded-full bg-black" />
+                     </div>
+                   ))}
+                </div>
+              </div>
             </div>
             
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <NeonButton variant="ghost" className="bg-[var(--bg-tertiary)] border-[var(--glass-border)] flex items-center gap-2 text-xs py-2 px-3">
-                <Eye size={14} className="text-[var(--text-muted)]" /> Watch
-                <span className="ml-1 bg-white/10 px-2 py-0.5 rounded-full text-white font-bold">{repoData.watcherCount}</span>
-              </NeonButton>
-              <NeonButton variant="ghost" className="bg-[var(--bg-tertiary)] border-[var(--glass-border)] flex items-center gap-2 text-xs py-2 px-3">
-                <GitFork size={14} className="text-[var(--text-muted)]" /> Fork
-                <span className="ml-1 bg-white/10 px-2 py-0.5 rounded-full text-white font-bold">{repoData.forkCount}</span>
-              </NeonButton>
-              <NeonButton variant="ghost" className="bg-[var(--bg-tertiary)] border-[var(--glass-border)] flex items-center gap-2 text-xs py-2 px-3 group">
-                <Star size={14} className="text-[var(--text-muted)] group-hover:text-[var(--brand-warning)] transition-colors" /> Star
-                <span className="ml-1 bg-white/10 px-2 py-0.5 rounded-full text-white font-bold group-hover:text-[var(--brand-warning)]">{repoData.starCount}</span>
-              </NeonButton>
+              <div className="flex rounded-md overflow-hidden border border-[var(--glass-border)] bg-[var(--bg-tertiary)] group hover:border-[var(--brand-primary)] transition-colors">
+                <button 
+                  className="flex items-center gap-2 text-xs py-2 px-3 hover:bg-white/5 transition-colors disabled:opacity-50"
+                  onClick={() => toggleWatch.mutate()}
+                  disabled={toggleWatch.isPending}
+                >
+                  <Eye size={14} className={repoData.isWatched ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'} /> 
+                  {repoData.isWatched ? 'Unwatch' : 'Watch'}
+                </button>
+                <button 
+                  className="px-3 py-2 text-xs font-bold bg-black/20 hover:bg-black/40 border-l border-[var(--glass-border)] transition-colors"
+                  onClick={() => setSocialModal({ isOpen: true, type: 'watchers' })}
+                >
+                  {repoData.watcherCount}
+                </button>
+              </div>
+
+              <div className="flex rounded-md overflow-hidden border border-[var(--glass-border)] bg-[var(--bg-tertiary)] group hover:border-white transition-colors">
+                <button 
+                  className="flex items-center gap-2 text-xs py-2 px-3 hover:bg-white/5 transition-colors disabled:opacity-50"
+                  onClick={() => forkRepo.mutate()}
+                  disabled={forkRepo.isPending}
+                >
+                  <GitFork size={14} className="text-[var(--text-muted)] group-hover:text-white" /> Fork
+                </button>
+                <button 
+                  className="px-3 py-2 text-xs font-bold bg-black/20 hover:bg-black/40 border-l border-[var(--glass-border)] transition-colors group-hover:text-white"
+                  onClick={() => setSocialModal({ isOpen: true, type: 'forks' })}
+                >
+                  {repoData.forkCount}
+                </button>
+              </div>
+
+              <div className="flex rounded-md overflow-hidden border border-[var(--glass-border)] bg-[var(--bg-tertiary)] group hover:border-[var(--brand-warning)] transition-colors">
+                <button 
+                  className="flex items-center gap-2 text-xs py-2 px-3 hover:bg-white/5 transition-colors disabled:opacity-50"
+                  onClick={() => toggleStar.mutate()}
+                  disabled={toggleStar.isPending}
+                >
+                  <Star size={14} className={repoData.isStarred ? 'text-[var(--brand-warning)] fill-[var(--brand-warning)]' : 'text-[var(--text-muted)] group-hover:text-[var(--brand-warning)] transition-colors'} /> 
+                  {repoData.isStarred ? 'Unstar' : 'Star'}
+                </button>
+                <button 
+                  className="px-3 py-2 text-xs font-bold bg-black/20 hover:bg-black/40 border-l border-[var(--glass-border)] transition-colors hover:text-[var(--brand-warning)]"
+                  onClick={() => setSocialModal({ isOpen: true, type: 'stargazers' })}
+                >
+                  {repoData.starCount}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -237,6 +370,78 @@ const RepositoryPage = () => {
           {tabContent}
         </motion.div>
       </AnimatePresence>
+
+      {storyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+          <button onClick={() => setStoryModalOpen(false)} className="absolute top-6 right-6 text-white hover:text-[var(--brand-purple)] z-50">
+            <X size={32} />
+          </button>
+          <div className="w-[400px] h-[700px] bg-[#111] rounded-2xl border border-[var(--brand-purple)]/30 overflow-hidden relative shadow-[0_0_50px_rgba(168,85,247,0.2)]">
+             {/* Progress Bar */}
+             <div className="absolute top-4 left-4 right-4 flex gap-1 z-20">
+               {[1, 2, 3].map((idx) => (
+                 <div key={idx} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
+                   {currentStoryIndex >= idx - 1 && (
+                     <motion.div 
+                       initial={{ width: currentStoryIndex === idx - 1 ? '0%' : '100%' }}
+                       animate={{ width: '100%' }}
+                       transition={{ duration: currentStoryIndex === idx - 1 ? 5 : 0 }}
+                       onAnimationComplete={() => {
+                         if (currentStoryIndex === idx - 1) {
+                           if (currentStoryIndex < 2) setCurrentStoryIndex(c => c + 1);
+                           else setStoryModalOpen(false);
+                         }
+                       }}
+                       className="h-full bg-white"
+                     />
+                   )}
+                 </div>
+               ))}
+             </div>
+             
+             {/* Story Content */}
+             <div className="absolute inset-0 z-10 flex flex-col p-6 pt-12">
+               <div className="flex items-center gap-3 mb-8">
+                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=Story${currentStoryIndex+1}&backgroundColor=111`} alt="Author" className="w-10 h-10 rounded-full border border-white" />
+                  <div>
+                    <h4 className="text-white font-bold text-sm">@dev_operative_{currentStoryIndex+1}</h4>
+                    <p className="text-xs text-white/70">{currentStoryIndex+1} hour ago</p>
+                  </div>
+               </div>
+               
+               <div className="flex-1 flex flex-col justify-center">
+                  <CyberBadge variant="purple" size="lg" className="w-fit mb-4">COMMIT {['a1b2c3d', 'f9e8d7c', 'b4a5d6e'][currentStoryIndex]}</CyberBadge>
+                  <h2 className="text-2xl font-display font-bold text-white mb-6">
+                    {['Refactored Auth Service for 10x Speed', 'Fixed Critical Vulnerability in API', 'Added Dark Mode Toggle'][currentStoryIndex]}
+                  </h2>
+                  <div className="bg-black/50 border border-[var(--glass-border)] rounded-lg p-4 font-mono text-sm text-[var(--brand-success)] overflow-hidden shadow-inner">
+                    {currentStoryIndex === 0 && '+ 45 lines\n- 120 lines\n\nOptimized database queries...'}
+                    {currentStoryIndex === 1 && '+ 12 lines\n- 4 lines\n\nPatched JWT token parsing logic...'}
+                    {currentStoryIndex === 2 && '+ 230 lines\n- 15 lines\n\nImplemented CSS variables for themes...'}
+                  </div>
+               </div>
+               
+               <div className="mt-8 text-center text-[var(--brand-purple)] font-mono text-xs flex items-center justify-center gap-2">
+                 <Sparkles size={14} /> AI Auto-Generated Summary
+               </div>
+             </div>
+             
+             {/* Navigation Controls */}
+             <div className="absolute inset-0 z-30 flex">
+               <div className="w-1/2 h-full" onClick={() => setCurrentStoryIndex(Math.max(0, currentStoryIndex - 1))} />
+               <div className="w-1/2 h-full" onClick={() => { if(currentStoryIndex < 2) setCurrentStoryIndex(c => c + 1); else setStoryModalOpen(false); }} />
+             </div>
+          </div>
+        </div>
+      )}
+
+      <SocialListModal 
+        isOpen={socialModal.isOpen} 
+        onClose={() => setSocialModal({ isOpen: false, type: null })} 
+        type={socialModal.type} 
+        owner={owner} 
+        repo={repo} 
+      />
     </motion.div>
   );
 };

@@ -32,6 +32,9 @@ router.put('/users/:userId/ban', auth, adminOnly, adminController.banUser);
 router.put('/users/:userId/unban', auth, adminOnly, adminController.unbanUser);
 router.delete('/users/:userId', auth, adminOnly, adminController.deleteUser);
 
+// ===== SYSTEM BROADCAST =====
+router.post('/broadcast', auth, adminOnly, adminController.systemBroadcast);
+
 // ===== SYSTEM ANALYTICS =====
 router.get('/analytics/dashboard', auth, adminOnly, adminController.getDashboardAnalytics);
 router.get('/analytics/users', auth, adminOnly, adminController.getUsersAnalytics);
@@ -55,10 +58,10 @@ router.put('/projects/:projectId/restore', auth, adminOnly, adminController.rest
 router.get('/repos', auth, reviewerOrAdmin, adminController.getAllRepositories);
 
 // ===== CONTENT MODERATION =====
-router.get('/moderation/feedback', auth, adminOnly, adminController.getFlaggedFeedback);
-router.put('/feedback/:feedbackId/flag', auth, adminOnly, adminController.flagFeedback);
-router.delete('/feedback/:feedbackId', auth, adminOnly, adminController.deleteFeedback);
-router.put('/users/:userId/warn', auth, adminOnly, adminController.warnUser);
+router.get('/moderation/feedback', auth, reviewerOrAdmin, adminController.getFlaggedFeedback);
+router.put('/feedback/:feedbackId/flag', auth, reviewerOrAdmin, adminController.flagFeedback);
+router.delete('/feedback/:feedbackId', auth, reviewerOrAdmin, adminController.deleteFeedback);
+router.put('/users/:userId/warn', auth, reviewerOrAdmin, adminController.warnUser);
 
 console.log('✅ Admin routes loaded successfully');
 

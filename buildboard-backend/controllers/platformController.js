@@ -259,3 +259,57 @@ exports.createTeam = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.executeCode = async (req, res) => {
+  try {
+    const { code, language } = req.body;
+    if (!code) return res.status(400).json({ message: 'Code is required' });
+
+    const { execFile } = require('child_process');
+    const fs = require('fs').promises;
+    const os = require('os');
+    const path = require('path');
+    
+    // Create a temporary directory
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'buildboard-run-'));
+    let tempFile = '';
+    let cmd = '';
+    let args = [];
+
+    if (language === 'javascript' || language === 'typescript') {
+      tempFile = path.join(tempDir, 'script.js');
+      await fs.writeFile(tempFile, code);
+      cmd = 'node';
+      args = [tempFile];
+    } else if (language === 'python') {
+      tempFile = path.join(tempDir, 'script.py');
+      await fs.writeFile(tempFile, code);
+      cmd = 'python';
+      args = [tempFile];
+    } else {
+      return res.status(400).json({ message: 'Unsupported language for execution. Currently only JavaScript and Python are supported.' });
+    }
+
+    // Execute with a timeout of 5 seconds to prevent infinite loops
+    execFile(cmd, args, { timeout: 5000, maxBuffer: 1024 * 1024 }, async (error, stdout, stderr) => {
+      // Cleanup temp dir
+      try {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      } catch (e) {
+        console.error('Failed to cleanup temp dir:', e);
+      }
+
+      if (error && error.killed) {
+        return res.status(200).json({ stdout: '', stderr: 'Execution timed out (5s limit)' });
+      }
+      
+      res.status(200).json({
+        stdout: stdout || '',
+        stderr: stderr || (error ? error.message : '')
+      });
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

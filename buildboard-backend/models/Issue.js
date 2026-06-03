@@ -81,6 +81,10 @@ const issueSchema = new mongoose.Schema(
       points: { type: Number, default: 0 },
       sprint: { type: String, default: '' },
     },
+    bountyAmount: {
+      type: Number,
+      default: 0,
+    },
     commentCount: {
       type: Number,
       default: 0,

@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { GlassCard, NeonButton, CyberInput, CyberBadge, CyberModal, CyberSkeleton } from '../components/ui';
 import { pageVariants, listVariants, itemVariants } from '../utils/animations';
-import { ShieldAlert, Users, Activity, Shield, Plus, ShieldCheck, UserPlus, Server, ActivitySquare } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ShieldAlert, Users, Activity, Shield, Plus, ShieldCheck, UserPlus, Server, ActivitySquare, Crown } from 'lucide-react';
 
 const Admin = () => {
   const { user } = useAuth();
@@ -14,6 +15,25 @@ const Admin = () => {
   const [formData, setFormData] = useState({ username: '', name: '', email: '', password: '', role: 'reviewer' });
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Broadcast state
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [broadcastSeverity, setBroadcastSeverity] = useState('info');
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  const handleBroadcast = async (e) => {
+    e.preventDefault();
+    if (!broadcastMsg.trim()) return;
+    setIsBroadcasting(true);
+    try {
+      await api.post('/admin/broadcast', { message: broadcastMsg, severity: broadcastSeverity });
+      setBroadcastMsg('');
+    } catch (err) {
+      console.error('Failed to transmit broadcast', err);
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -76,6 +96,11 @@ const Admin = () => {
         <p className="text-sm font-mono text-[var(--text-muted)] mt-2">
           Global platform operations for personnel, sectors, syndicates, and telemetry monitoring.
         </p>
+        <Link to="/godmode" className="inline-block mt-4">
+          <NeonButton variant="primary" className="text-xs flex items-center gap-2 border-[var(--brand-danger)] bg-[var(--brand-danger)]/10 text-[var(--brand-danger)] hover:bg-[var(--brand-danger)]/20">
+            <Crown size={14} /> ENTER_GOD_MODE
+          </NeonButton>
+        </Link>
       </div>
 
       {analytics.isLoading ? (
@@ -186,6 +211,49 @@ const Admin = () => {
           </div>
         </GlassCard>
       </div>
+
+      {/* BROADCAST HUB */}
+      <GlassCard className="p-0 overflow-hidden border-t-2 border-t-[var(--brand-danger)]">
+        <div className="p-5 border-b border-[var(--glass-border)] bg-black/40">
+          <h2 className="text-sm font-mono uppercase tracking-widest text-[var(--brand-danger)] flex items-center gap-2">
+            <ShieldAlert size={16} /> SYSTEM_BROADCAST_HUB
+          </h2>
+          <p className="text-xs text-[var(--text-muted)] mt-2">Transmit a global holographic overlay to all active operatives.</p>
+        </div>
+        <div className="p-6">
+          <form onSubmit={handleBroadcast} className="flex gap-4 items-end flex-col sm:flex-row">
+            <div className="flex-1 w-full">
+              <label className="block text-[10px] text-[var(--text-muted)] uppercase mb-2">Transmission Payload (Message)</label>
+              <CyberInput 
+                value={broadcastMsg}
+                onChange={(e) => setBroadcastMsg(e.target.value)}
+                placeholder="Enter emergency broadcast message..."
+                required
+              />
+            </div>
+            <div className="w-full sm:w-48">
+              <label className="block text-[10px] text-[var(--text-muted)] uppercase mb-2">Severity Level</label>
+              <select 
+                className="w-full bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg p-3 text-sm text-white focus:border-[var(--brand-danger)] focus:ring-1 focus:ring-[var(--brand-danger)]/50 outline-none transition-all appearance-none cursor-pointer"
+                value={broadcastSeverity} 
+                onChange={(e) => setBroadcastSeverity(e.target.value)}
+              >
+                <option value="info">INFO (Blue)</option>
+                <option value="warning">WARNING (Yellow)</option>
+                <option value="critical">CRITICAL (Red)</option>
+              </select>
+            </div>
+            <NeonButton 
+              type="submit" 
+              variant="primary" 
+              className="w-full sm:w-auto px-8 border-[var(--brand-danger)] bg-[var(--brand-danger)]/10 text-[var(--brand-danger)] hover:bg-[var(--brand-danger)]/20"
+              disabled={isBroadcasting || !broadcastMsg.trim()}
+            >
+              {isBroadcasting ? 'TRANSMITTING...' : 'TRANSMIT'}
+            </NeonButton>
+          </form>
+        </div>
+      </GlassCard>
 
       {/* Create User Modal */}
       <AnimatePresence>
