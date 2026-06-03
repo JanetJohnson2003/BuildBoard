@@ -10,9 +10,7 @@ function ProjectManagement() {
   const [totalPages, setTotalPages] = useState(1)
   const token = localStorage.getItem('token')
 
-  useEffect(() => {
-    fetchProjects()
-  }, [search, archivedFilter, page])
+
 
   const fetchProjects = async () => {
     try {
@@ -90,6 +88,10 @@ function ProjectManagement() {
       alert('❌ Error deleting project')
     }
   }
+
+  useEffect(() => {
+    fetchProjects()
+  }, [search, archivedFilter, page])
 
   if (loading) {
     return <div style={styles.loading}>⏳ Loading projects...</div>

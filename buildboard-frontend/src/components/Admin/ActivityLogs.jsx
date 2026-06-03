@@ -9,9 +9,7 @@ function ActivityLogs() {
   const [totalPages, setTotalPages] = useState(1)
   const token = localStorage.getItem('token')
 
-  useEffect(() => {
-    fetchLogs()
-  }, [action, page])
+
 
   const fetchLogs = async () => {
     try {
@@ -60,6 +58,10 @@ function ActivityLogs() {
       alert('❌ Error exporting logs')
     }
   }
+
+  useEffect(() => {
+    fetchLogs()
+  }, [action, page])
 
   if (loading) {
     return <div style={styles.loading}>⏳ Loading logs...</div>

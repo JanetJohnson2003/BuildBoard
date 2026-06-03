@@ -7,9 +7,7 @@ function AdminDashboard() {
   const [error, setError] = useState(null)
   const token = localStorage.getItem('token')
 
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
+
 
   const fetchDashboardData = async () => {
     try {
@@ -53,6 +51,10 @@ function AdminDashboard() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
 
   if (loading) {
     return <div style={styles.loading}>⏳ Loading dashboard...</div>
