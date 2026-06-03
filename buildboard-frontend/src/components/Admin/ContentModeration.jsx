@@ -6,9 +6,7 @@ function ContentModeration() {
   const [loading, setLoading] = useState(true)
   const token = localStorage.getItem('token')
 
-  useEffect(() => {
-    fetchFlaggedFeedback()
-  }, [])
+
 
   const fetchFlaggedFeedback = async () => {
     try {
@@ -45,6 +43,10 @@ function ContentModeration() {
       alert('❌ Error deleting feedback')
     }
   }
+
+  useEffect(() => {
+    fetchFlaggedFeedback()
+  }, [])
 
   if (loading) {
     return <div style={styles.loading}>⏳ Loading flagged content...</div>

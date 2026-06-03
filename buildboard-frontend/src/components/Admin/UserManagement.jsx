@@ -12,9 +12,7 @@ function UserManagement() {
   const [showModal, setShowModal] = useState(false)
   const token = localStorage.getItem('token')
 
-  useEffect(() => {
-    fetchUsers()
-  }, [search, roleFilter, page])
+
 
   const fetchUsers = async () => {
     try {
@@ -111,6 +109,14 @@ function UserManagement() {
       alert('❌ Error deleting user')
     }
   }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [search, roleFilter, page])
+
+  useEffect(() => {
+    fetchUserDetails()
+  }, [])
 
   if (loading) {
     return <div style={styles.loading}>⏳ Loading users...</div>
@@ -265,9 +271,7 @@ function UserDetailsModal({ user, onClose, token }) {
   const [userDetails, setUserDetails] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchUserDetails()
-  }, [])
+
 
   const fetchUserDetails = async () => {
     try {
