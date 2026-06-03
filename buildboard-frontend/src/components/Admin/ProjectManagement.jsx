@@ -19,7 +19,7 @@ function ProjectManagement() {
       console.log('📁 Fetching projects...')
       setLoading(true)
 
-      const res = await axios.get('http://localhost:5000/api/admin/projects', {
+      const res = await axios.get('/api/admin/projects', {
         params: {
           search: search || undefined,
           archived: archivedFilter || undefined,
@@ -44,7 +44,7 @@ function ProjectManagement() {
       console.log('📦 Archiving project...')
 
       await axios.put(
-        `http://localhost:5000/api/admin/projects/${projectId}/archive`,
+        `/api/admin/projects/${projectId}/archive`,
         {},
         { headers: { Authorization: token } }
       )
@@ -61,7 +61,7 @@ function ProjectManagement() {
       console.log('♻️ Restoring project...')
 
       await axios.put(
-        `http://localhost:5000/api/admin/projects/${projectId}/restore`,
+        `/api/admin/projects/${projectId}/restore`,
         {},
         { headers: { Authorization: token } }
       )
@@ -80,7 +80,7 @@ function ProjectManagement() {
       console.log('🗑️ Deleting project...')
 
       await axios.delete(
-        `http://localhost:5000/api/admin/projects/${projectId}`,
+        `/api/admin/projects/${projectId}`,
         { headers: { Authorization: token } }
       )
 

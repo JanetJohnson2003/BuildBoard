@@ -15,7 +15,7 @@ function ContentModeration() {
       console.log('🚩 Fetching flagged feedback...')
       setLoading(true)
 
-      const res = await axios.get('http://localhost:5000/api/admin/moderation/feedback', {
+      const res = await axios.get('/api/admin/moderation/feedback', {
         headers: { Authorization: token }
       })
 
@@ -35,7 +35,7 @@ function ContentModeration() {
       console.log('🗑️ Deleting feedback...')
 
       await axios.delete(
-        `http://localhost:5000/api/admin/feedback/${feedbackId}`,
+        `/api/admin/feedback/${feedbackId}`,
         { headers: { Authorization: token } }
       )
 

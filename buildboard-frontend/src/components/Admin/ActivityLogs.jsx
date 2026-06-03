@@ -18,7 +18,7 @@ function ActivityLogs() {
       console.log('📋 Fetching activity logs...')
       setLoading(true)
 
-      const res = await axios.get('http://localhost:5000/api/admin/logs', {
+      const res = await axios.get('/api/admin/logs', {
         params: {
           action: action || undefined,
           page,
@@ -41,7 +41,7 @@ function ActivityLogs() {
     try {
       console.log('📥 Exporting logs...')
 
-      const res = await axios.get('http://localhost:5000/api/admin/logs/export', {
+      const res = await axios.get('/api/admin/logs/export', {
         headers: { Authorization: token },
         responseType: 'blob'
       })

@@ -21,7 +21,7 @@ function UserManagement() {
       console.log('👥 Fetching users...')
       setLoading(true)
 
-      const res = await axios.get('http://localhost:5000/api/admin/users', {
+      const res = await axios.get('/api/admin/users', {
         params: {
           search: search || undefined,
           role: roleFilter || undefined,
@@ -46,7 +46,7 @@ function UserManagement() {
       console.log('🔄 Changing role...')
 
       await axios.put(
-        `http://localhost:5000/api/admin/users/${userId}/role`,
+        `/api/admin/users/${userId}/role`,
         { role: newRole },
         { headers: { Authorization: token } }
       )
@@ -65,7 +65,7 @@ function UserManagement() {
       console.log('🚫 Banning user...')
 
       await axios.put(
-        `http://localhost:5000/api/admin/users/${userId}/ban`,
+        `/api/admin/users/${userId}/ban`,
         {},
         { headers: { Authorization: token } }
       )
@@ -82,7 +82,7 @@ function UserManagement() {
       console.log('✅ Unbanning user...')
 
       await axios.put(
-        `http://localhost:5000/api/admin/users/${userId}/unban`,
+        `/api/admin/users/${userId}/unban`,
         {},
         { headers: { Authorization: token } }
       )
@@ -101,7 +101,7 @@ function UserManagement() {
       console.log('🗑️ Deleting user...')
 
       await axios.delete(
-        `http://localhost:5000/api/admin/users/${userId}`,
+        `/api/admin/users/${userId}`,
         { headers: { Authorization: token } }
       )
 
@@ -272,7 +272,7 @@ function UserDetailsModal({ user, onClose, token }) {
   const fetchUserDetails = async () => {
     try {
       const res = await axios.get(
-        `http://localhost:5000/api/admin/users/${user._id}`,
+        `/api/admin/users/${user._id}`,
         { headers: { Authorization: token } }
       )
       setUserDetails(res.data)

@@ -28,7 +28,7 @@ function Notifications() {
     try {
       setLoading(true)
       const res = await axios.get(
-        'http://localhost:5000/api/notifications',
+        '/api/notifications',
         { 
           headers: { Authorization: token },
           timeout: 5000
@@ -49,7 +49,7 @@ function Notifications() {
     
     try {
       const res = await axios.get(
-        'http://localhost:5000/api/notifications/unread-count',
+        '/api/notifications/unread-count',
         { 
           headers: { Authorization: token },
           timeout: 5000
@@ -64,7 +64,7 @@ function Notifications() {
   const handleMarkAsRead = async (notificationId) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/notifications/${notificationId}/read`,
+        `/api/notifications/${notificationId}/read`,
         {},
         { headers: { Authorization: token } }
       )
@@ -77,7 +77,7 @@ function Notifications() {
   const handleDelete = async (notificationId) => {
     try {
       await axios.delete(
-        `http://localhost:5000/api/notifications/${notificationId}`,
+        `/api/notifications/${notificationId}`,
         { headers: { Authorization: token } }
       )
       fetchNotifications()
