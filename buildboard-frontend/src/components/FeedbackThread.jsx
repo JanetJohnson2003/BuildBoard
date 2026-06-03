@@ -12,7 +12,7 @@ function FeedbackThread({ feedback, token, onUpdate }) {
     try {
       setLoading(true)
       const res = await axios.post(
-        `http://localhost:5000/api/feedback/${feedback._id}/reply`,
+        `/api/feedback/${feedback._id}/reply`,
         { comment: replyText },
         { headers: { Authorization: token } }
       )
@@ -32,7 +32,7 @@ function FeedbackThread({ feedback, token, onUpdate }) {
 
     try {
       const res = await axios.delete(
-        `http://localhost:5000/api/feedback/${feedback._id}/reply/${replyId}`,
+        `/api/feedback/${feedback._id}/reply/${replyId}`,
         { headers: { Authorization: token } }
       )
       onUpdate(res.data)

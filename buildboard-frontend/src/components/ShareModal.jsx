@@ -23,7 +23,7 @@ function ShareModal({ projectId, onClose, onShare }) {
       setError('');
       console.log('📥 Fetching users...');
       
-      const res = await axios.get('http://localhost:5000/api/users', {
+      const res = await axios.get('/api/users', {
         headers: { 
           Authorization: token,
           'Content-Type': 'application/json'
@@ -69,7 +69,7 @@ function ShareModal({ projectId, onClose, onShare }) {
       console.log('📤 Sharing project with users:', selectedUsers);
 
       const res = await axios.post(
-        `http://localhost:5000/api/projects/${projectId}/share`,
+        `/api/projects/${projectId}/share`,
         { sharedWith: selectedUsers },
         { 
           headers: { 

@@ -21,7 +21,7 @@ function Analytics() {
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['analyticsDashboard'],
     queryFn: async () => {
-      const res = await axios.get('http://localhost:5000/api/analytics/dashboard', {
+      const res = await axios.get('/api/analytics/dashboard', {
         headers: { Authorization: token }
       });
       return res.data;

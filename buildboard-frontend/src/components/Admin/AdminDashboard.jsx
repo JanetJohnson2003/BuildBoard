@@ -19,19 +19,19 @@ function AdminDashboard() {
 
       // ✅ Use admin endpoints instead
       const [dashRes, usersRes, projectsRes, activityRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/admin/analytics/dashboard', {
+        axios.get('/api/admin/analytics/dashboard', {
           headers: { Authorization: token },
           timeout: 10000
         }),
-        axios.get('http://localhost:5000/api/admin/analytics/users', {
+        axios.get('/api/admin/analytics/users', {
           headers: { Authorization: token },
           timeout: 10000
         }),
-        axios.get('http://localhost:5000/api/admin/analytics/projects', {
+        axios.get('/api/admin/analytics/projects', {
           headers: { Authorization: token },
           timeout: 10000
         }),
-        axios.get('http://localhost:5000/api/admin/analytics/activities', {
+        axios.get('/api/admin/analytics/activities', {
           headers: { Authorization: token },
           timeout: 10000
         })

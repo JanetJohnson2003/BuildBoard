@@ -29,7 +29,7 @@ function Feedback() {
     queryKey: ['feedback', versionId],
     queryFn: async () => {
       const res = await axios.get(
-        `http://localhost:5000/api/feedback/version/${versionId}`,
+        `/api/feedback/version/${versionId}`,
         {
           headers: { Authorization: token }
         }
@@ -48,7 +48,7 @@ function Feedback() {
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await axios.post(
-        `http://localhost:5000/api/feedback`,
+        `/api/feedback`,
         {
           versionId,
           comment: formData.comment,
@@ -73,7 +73,7 @@ function Feedback() {
   // Delete Feedback Mutation
   const deleteMutation = useMutation({
     mutationFn: async (feedbackId) => {
-      await axios.delete(`http://localhost:5000/api/feedback/${feedbackId}`, {
+      await axios.delete(`/api/feedback/${feedbackId}`, {
         headers: { Authorization: token }
       });
     },
@@ -86,7 +86,7 @@ function Feedback() {
   const resolveMutation = useMutation({
     mutationFn: async (feedbackId) => {
       await axios.put(
-        `http://localhost:5000/api/feedback/${feedbackId}`,
+        `/api/feedback/${feedbackId}`,
         { status: 'resolved' },
         {
           headers: { Authorization: token }

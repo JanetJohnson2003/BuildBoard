@@ -19,7 +19,7 @@ function SharedProjects() {
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['sharedProjects'],
     queryFn: async () => {
-      const res = await axios.get('http://localhost:5000/api/projects/shared/', {
+      const res = await axios.get('/api/projects/shared/', {
         headers: { Authorization: token }
       });
       return res.data;

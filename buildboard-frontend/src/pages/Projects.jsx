@@ -34,7 +34,7 @@ function Projects() {
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      const res = await axios.get('http://localhost:5000/api/projects', {
+      const res = await axios.get('/api/projects', {
         headers: { Authorization: token }
       });
       return res.data;
@@ -44,7 +44,7 @@ function Projects() {
 
   const createMutation = useMutation({
     mutationFn: async (data) => {
-      const res = await axios.post('http://localhost:5000/api/projects', data, {
+      const res = await axios.post('/api/projects', data, {
         headers: { Authorization: token }
       });
       return res.data;

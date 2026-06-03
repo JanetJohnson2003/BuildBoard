@@ -8,7 +8,7 @@ const SystemBroadcast = () => {
 
   useEffect(() => {
     // Initialize socket connection
-    const socketURL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    const socketURL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
     const socket = io(socketURL, {
       withCredentials: true
     });

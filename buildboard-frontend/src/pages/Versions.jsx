@@ -30,7 +30,7 @@ function Versions() {
     queryKey: ['versions', projectId],
     queryFn: async () => {
       const res = await axios.get(
-        `http://localhost:5000/api/versions/${projectId}`,
+        `/api/versions/${projectId}`,
         {
           headers: { Authorization: token }
         }
@@ -63,7 +63,7 @@ function Versions() {
       uploadFormData.append('file', formData.file);
 
       const res = await axios.post(
-        `http://localhost:5000/api/versions/${projectId}`,
+        `/api/versions/${projectId}`,
         uploadFormData,
         {
           headers: {
@@ -84,7 +84,7 @@ function Versions() {
   // Delete Mutation
   const deleteMutation = useMutation({
     mutationFn: async (versionId) => {
-      await axios.delete(`http://localhost:5000/api/versions/${versionId}`, {
+      await axios.delete(`/api/versions/${versionId}`, {
         headers: { Authorization: token }
       });
     },
@@ -108,7 +108,7 @@ function Versions() {
   const handleDownload = async (versionId, fileName) => {
     try {
       const res = await axios.get(
-        `http://localhost:5000/api/versions/download/${versionId}`,
+        `/api/versions/download/${versionId}`,
         {
           headers: { Authorization: token },
           responseType: 'blob'

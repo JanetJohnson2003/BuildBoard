@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { GlassCard, CyberInput, CyberSkeleton } from '../../components/ui';
 import { pageVariants, itemVariants, listVariants } from '../../utils/animations';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : '';
 
 const RepoChat = () => {
   const { owner, repo } = useParams();
