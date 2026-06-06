@@ -4,6 +4,9 @@ import { API_URL } from './config';
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
+  headers: {
+    'Bypass-Tunnel-Reminder': 'true'
+  }
 });
 
 // Interceptor to add access token to requests
