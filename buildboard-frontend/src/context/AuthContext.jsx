@@ -31,44 +31,37 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const mockUser = {
-      id: 'mock-user-id',
-      username: email.split('@')[0],
-      name: 'Test User',
-      email,
-      role: 'admin',
-      avatar: 'https://ui-avatars.com/api/?name=Test+User'
-    };
-    localStorage.setItem('token', 'mock-token');
-    localStorage.setItem('refreshToken', 'mock-refresh');
-    setUser(mockUser);
-    return { token: 'mock-token', refreshToken: 'mock-refresh', user: mockUser };
+    const { data } = await api.post('/auth/login', { email, password });
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('refreshToken', data.refreshToken);
+    setUser(data.user);
+    return data;
   };
 
   const register = async (userData) => {
-    const mockUser = {
-      id: 'mock-user-id',
-      username: userData.username,
-      name: userData.name,
-      email: userData.email,
-      role: userData.role || 'user',
-      avatar: `https://ui-avatars.com/api/?name=${userData.name}`
-    };
-    localStorage.setItem('token', 'mock-token');
-    localStorage.setItem('refreshToken', 'mock-refresh');
-    setUser(mockUser);
-    return { token: 'mock-token', refreshToken: 'mock-refresh', user: mockUser };
+    const { data } = await api.post('/auth/register', userData);
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('refreshToken', data.refreshToken);
+    setUser(data.user);
+    return data;
   };
 
   const sendOtp = async (email) => {
-    return { message: 'OTP sent', devOtp: '123456' };
+    const { data } = await api.post('/auth/send-otp', { email });
+    return data;
   };
 
   const logout = async () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    setUser(null);
-    window.location.href = '/login';
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      setUser(null);
+      window.location.href = '/login';
+    }
   };
 
   return (
