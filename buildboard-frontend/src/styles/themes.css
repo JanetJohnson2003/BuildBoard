@@ -1,0 +1,29 @@
+/* Cyberpunk Light Theme Variant */
+.light {
+  --bg-main: #f0f2f5;
+  --bg-subtle: #ffffff;
+  --bg-tertiary: #e4e6eb;
+  
+  --border-main: rgba(0, 0, 0, 0.1);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border-accent: rgba(0, 212, 255, 0.4);
+
+  --text-main: #1a1a1c;
+  --text-muted: #52525b;
+  --text-accent: #0088cc;
+  
+  --brand-primary: #0088cc;
+  --brand-success: #00a680;
+  --brand-danger: #d9266e;
+  --brand-warning: #cc4f1f;
+  --brand-purple: #8338ec;
+
+  --glass-fill: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-highlight: rgba(0, 0, 0, 0.05);
+}
+
+/* Theme transition classes */
+.theme-transition * {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease !important;
+}
